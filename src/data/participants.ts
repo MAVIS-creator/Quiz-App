@@ -19,4 +19,5 @@ export const participants: Participant[] = [
   { name: 'Obiye Isaac Osaremen', matric: '2025003870', phone: '9114220817' },
   { name: 'ADEMOLA BOLUWATIFE JEREMIAH', matric: '2025003210', phone: '8025073532' },
   { name: 'Olatunji Testimony Israel', matric: '2025002074', phone: '9015037316' },
+  {name: 'Olalere Samuel Ayomide', matric: '2025007283', phone: '9052044661' },
 ];

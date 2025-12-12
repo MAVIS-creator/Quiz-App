@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { questions, type Question } from './data/questions';
+import { questions as questionBank, type Question } from './data/questions';
+import { participants, type Participant } from './data/participants';
 
-// Minimal FaceDetector typings to keep TypeScript happy on browsers that ship it.
 type FaceDetectorResult = { boundingBox: DOMRectReadOnly };
 type FaceDetectorConstructor = new (options?: {
   fastMode?: boolean;
@@ -24,6 +24,7 @@ declare global {
 
 const QUIZ_DURATION_SECONDS = 30 * 60;
 const MAX_VIOLATIONS = 3;
+const ADMIN_CODE = 'admin123';
 
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60)
@@ -33,7 +34,24 @@ const formatTime = (totalSeconds: number) => {
   return `${minutes}:${seconds}`;
 };
 
+const shuffleArray = <T,>(items: T[]) => {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
 function App() {
+  const [user, setUser] = useState<Participant | null>(null);
+  const [matricInput, setMatricInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [adminCode, setAdminCode] = useState('');
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [sessionKey, setSessionKey] = useState(0);
+  const [auditLog, setAuditLog] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [secondsLeft, setSecondsLeft] = useState(QUIZ_DURATION_SECONDS);
@@ -50,8 +68,18 @@ function App() {
   const missedFaceCountRef = useRef(0);
   const focusLossRef = useRef<number>(0);
 
+  const questions = useMemo(() => {
+    return questionBank.map((q) => ({ ...q, options: shuffleArray(q.options) }));
+  }, [sessionKey]);
+
+  const currentQuestion = questions[currentIndex];
+  const progress = Math.round(((currentIndex + 1) / questions.length) * 100);
+  const answeredCount = Object.keys(answers).length;
+  const sessionActive = Boolean(user);
+  const quizRunning = Boolean(user && !showResults && !isLocked);
+
   useEffect(() => {
-    if (showResults || isLocked) return undefined;
+    if (!quizRunning) return undefined;
     const interval = window.setInterval(() => {
       setSecondsLeft((prev: number) => {
         if (prev <= 1) {
@@ -62,14 +90,14 @@ function App() {
       });
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [showResults, isLocked]);
+  }, [quizRunning]);
 
   useEffect(() => {
+    if (!sessionActive) return undefined;
     const handleVisibility = () => {
       if (document.hidden) recordViolation('Tab or window change detected');
     };
     const handleBlur = () => {
-      // Avoid double counting blur+visibility in the same moment.
       const now = Date.now();
       if (now - focusLossRef.current < 400) return;
       focusLossRef.current = now;
@@ -90,12 +118,16 @@ function App() {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, []);
+  }, [sessionActive]);
 
   useEffect(() => {
-    // Tab/page/face guard
     let intervalId: number | undefined;
     let mediaStream: MediaStream | undefined;
+
+    if (!sessionActive) {
+      setFaceStatus('pending');
+      return () => undefined;
+    }
 
     const startFaceMonitoring = async () => {
       if (!window.FaceDetector || !navigator.mediaDevices?.getUserMedia) {
@@ -144,10 +176,17 @@ function App() {
       if (intervalId) window.clearInterval(intervalId);
       if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [sessionActive]);
+
+  const logEvent = (message: string) => {
+    const entry = `${new Date().toLocaleTimeString()} · ${message}`;
+    setAuditLog((prev: string[]) => [entry, ...prev].slice(0, 30));
+  };
 
   const recordViolation = (reason: string) => {
-    setViolations((prev: string[]) => [`${new Date().toLocaleTimeString()} · ${reason}`, ...prev].slice(0, 6));
+    const entry = `${new Date().toLocaleTimeString()} · ${reason}`;
+    setViolations((prev: string[]) => [entry, ...prev].slice(0, 6));
+    logEvent(`Violation: ${reason}`);
     setViolationCount((prev: number) => {
       const next = prev + 1;
       if (next >= MAX_VIOLATIONS) {
@@ -161,25 +200,123 @@ function App() {
   const handleSelect = (question: Question, choice: string) => {
     if (showResults || isLocked) return;
     setAnswers((prev: Record<number, string>) => ({ ...prev, [question.id]: choice }));
+    logEvent(`Answered Q${question.id}: ${choice}`);
   };
 
   const handleSubmit = () => {
     setShowResults(true);
+    logEvent('Quiz submitted manually');
   };
 
   const handlePrev = () => setCurrentIndex((prev: number) => Math.max(prev - 1, 0));
   const handleNext = () =>
     setCurrentIndex((prev: number) => Math.min(prev + 1, questions.length - 1));
 
+  const handleLogin = () => {
+    const clean = (value: string) => value.replace(/\s+/g, '').toLowerCase();
+    const cleanDigits = (value: string) => value.replace(/\D/g, '');
+
+    const normalizedMatric = clean(matricInput);
+    const normalizedPhone = cleanDigits(phoneInput);
+
+    const found = participants.find((p) => {
+      const matricMatch = p.matric ? clean(p.matric) === normalizedMatric : false;
+      const phoneMatch = cleanDigits(p.phone) === normalizedPhone && normalizedPhone.length > 0;
+      return matricMatch || phoneMatch;
+    });
+
+    if (!found) {
+      setLoginError('Not on the roster. Use your matric number or phone (for the no-matric entry).');
+      return;
+    }
+
+    setUser(found);
+    setLoginError('');
+    setAnswers({});
+    setCurrentIndex(0);
+    setShowResults(false);
+    setIsLocked(false);
+    setViolationCount(0);
+    setViolations([]);
+    setSecondsLeft(QUIZ_DURATION_SECONDS);
+    setFaceStatus('pending');
+    setSessionKey((prev: number) => prev + 1);
+    logEvent(`Login: ${found.name} (${found.matric ?? 'Phone login'})`);
+  };
+
+  const handleAdminUnlock = () => {
+    if (adminCode.trim() === ADMIN_CODE) {
+      setAdminUnlocked(true);
+    } else {
+      setAdminUnlocked(false);
+    }
+  };
+
   const score = useMemo(() => {
-    return questions.reduce((total, q) => {
+    return questions.reduce((total: number, q: Question) => {
       if (answers[q.id] && answers[q.id] === q.answer) return total + 1;
       return total;
     }, 0);
-  }, [answers]);
+  }, [answers, questions]);
 
-  const currentQuestion = questions[currentIndex];
-  const progress = Math.round(((currentIndex + 1) / questions.length) * 100);
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 px-4 py-10">
+        <div className="mx-auto grid max-w-4xl gap-6">
+          <div className="card-surface p-6 sm:p-8">
+            <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Secure Access</p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-50">HTML/CSS Quiz Login</h1>
+            <p className="mt-2 text-slate-300">Only the listed students can start. Enter matric number or phone. The person without a matric number must use their phone.</p>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">Matric number</label>
+                <input
+                  value={matricInput}
+                  onChange={(e) => setMatricInput(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-slate-100 focus:border-brand-400 focus:outline-none"
+                  placeholder="e.g. 2025000831"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">Phone (digits only)</label>
+                <input
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-slate-100 focus:border-brand-400 focus:outline-none"
+                  placeholder="e.g. 8084434242"
+                />
+              </div>
+            </div>
+
+            {loginError && <p className="mt-3 text-sm text-rose-300">{loginError}</p>}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button onClick={handleLogin} className="button-primary">Enter quiz</button>
+              <div className="rounded-full bg-slate-800/80 px-3 py-2 text-xs text-slate-300">
+                Anti-cheat active: tab fence + face presence
+              </div>
+            </div>
+          </div>
+
+          <div className="card-surface p-6">
+            <p className="text-sm font-semibold text-slate-200">Roster preview</p>
+            <p className="text-sm text-slate-400">Only these students can sign in. Phone works for all; phone-only for the NIL matric entry.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {participants.map((p) => (
+                <div key={`${p.name}-${p.phone}`} className="rounded-lg border border-slate-800/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
+                  <p className="font-semibold">{p.name}</p>
+                  <p className="text-slate-400">Matric: {p.matric ?? 'Use phone'}</p>
+                  <p className="text-slate-400">Phone: {p.phone}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const percentage = Math.round((score / questions.length) * 100);
 
   return (
@@ -190,6 +327,7 @@ function App() {
             <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Secure Quiz</p>
             <h1 className="text-3xl font-bold">HTML/CSS Fundamentals</h1>
             <p className="text-slate-400">30-minute timer · {questions.length} questions · Auto lock after {MAX_VIOLATIONS} violations</p>
+            <p className="text-sm text-slate-300">Signed in as {user.name} · {user.matric ?? 'Phone login'} · {user.phone}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="card-surface flex items-center gap-3 px-4 py-3">
@@ -222,6 +360,10 @@ function App() {
               <div className="flex items-center gap-2 rounded-full bg-slate-800/70 px-3 py-1 text-xs font-semibold text-slate-200">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
                 {progress}% complete
+              </div>
+              <div className="flex items-center gap-2 rounded-full bg-slate-800/70 px-3 py-1 text-xs font-semibold text-slate-200">
+                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
+                {answeredCount} answered
               </div>
             </div>
 
@@ -336,6 +478,7 @@ function App() {
                 <li>Keep your face in view; allow camera when prompted.</li>
                 <li>Stay on this tab; switching windows adds strikes.</li>
                 <li>Timer is 30 minutes. Auto-submit when time ends.</li>
+                <li>Use only your listed matric or phone to access.</li>
               </ul>
             </div>
 
@@ -356,6 +499,54 @@ function App() {
                 </div>
               </div>
             )}
+
+            <div className="card-surface p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">Admin console</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={adminCode}
+                    onChange={(e) => setAdminCode(e.target.value)}
+                    placeholder="Admin code"
+                    className="w-28 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:border-brand-400 focus:outline-none"
+                  />
+                  <button onClick={handleAdminUnlock} className="button-primary px-3 py-1 text-xs">
+                    Unlock
+                  </button>
+                </div>
+              </div>
+              {adminUnlocked ? (
+                <div className="mt-4 space-y-3 text-sm text-slate-200">
+                  <div className="rounded-lg border border-slate-800/80 bg-slate-900/70 px-3 py-2">
+                    <p className="font-semibold">Session snapshot</p>
+                    <p className="text-slate-300">User: {user.name}</p>
+                    <p className="text-slate-300">Matric: {user.matric ?? 'Phone login'}</p>
+                    <p className="text-slate-300">Progress: {answeredCount}/{questions.length} answered</p>
+                    <p className="text-slate-300">Violations: {violationCount}</p>
+                    <p className="text-slate-300">Time left: {formatTime(secondsLeft)}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase text-slate-400">Audit log</p>
+                    <div className="max-h-32 overflow-y-auto space-y-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2 text-xs text-slate-200">
+                      {auditLog.length === 0 ? <p className="text-slate-500">No events yet.</p> : auditLog.map((entry) => (<div key={entry}>{entry}</div>))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase text-slate-400">Whitelist</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2 text-xs text-slate-200">
+                      {participants.map((p) => (
+                        <div key={`${p.name}-${p.phone}`} className="flex items-center justify-between">
+                          <span className="font-semibold">{p.name}</span>
+                          <span className="text-slate-400">{p.matric ?? 'Phone'} · {p.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-slate-400">Enter admin code to view session stats and audit.</p>
+              )}
+            </div>
           </aside>
         </section>
       </div>
