@@ -508,7 +508,21 @@ app.get('/api/violations', (req, res) => {
   res.json(allViolations);
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server ready for proctoring`);
-});
+// Start server with simple retry if port is in use
+const startServer = (port, attempt = 0) => {
+  httpServer.listen(port, () => {
+    console.log(`Backend server running on http://localhost:${port}`);
+    console.log(`WebSocket server ready for proctoring`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && attempt < 3) {
+      const nextPort = Number(port) + 1;
+      console.warn(`Port ${port} in use. Retrying on ${nextPort}...`);
+      setTimeout(() => startServer(nextPort, attempt + 1), 500);
+    } else {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  });
+};
+
+startServer(process.env.PORT || PORT);

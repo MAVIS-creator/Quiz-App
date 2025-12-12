@@ -185,11 +185,23 @@ export default function ProctorDashboard() {
                         {new Date(v.timestamp).toLocaleTimeString()}
                       </p>
                       {v.evidence && (
-                        <img
-                          src={v.evidence}
-                          alt="Evidence"
-                          className="mt-2 w-full h-32 object-cover rounded border"
-                        />
+                        v.evidence.startsWith('data:audio') ? (
+                          <div className="mt-2">
+                            <audio controls className="w-full">
+                              <source src={v.evidence} type="audio/webm" />
+                              Your browser does not support audio playback.
+                            </audio>
+                            <p className="text-xs text-gray-500 mt-1">
+                              <i className="bx bx-microphone"></i> Audio evidence recorded
+                            </p>
+                          </div>
+                        ) : (
+                          <img
+                            src={v.evidence}
+                            alt="Evidence"
+                            className="mt-2 w-full h-32 object-cover rounded border"
+                          />
+                        )
                       )}
                     </div>
                   ))}

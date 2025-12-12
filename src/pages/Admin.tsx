@@ -15,8 +15,6 @@ export default function Admin() {
   const [examMinutes, setExamMinutes] = useState(60);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [snapshotUpdated, setSnapshotUpdated] = useState<string | null>(null);
-  const [snapshotGrid, setSnapshotGrid] = useState<any[]>([]);
-  const [proctorPolling, setProctorPolling] = useState(true);
 
   const isSessionOnline = (session?: SessionData | null) => {
     if (!session || session.submitted) return false;
@@ -69,25 +67,6 @@ export default function Admin() {
     return () => clearInterval(interval);
   }, [selectedParticipant]);
 
-  // Proctor grid polling (all snapshots) with toggle
-  useEffect(() => {
-    if (!proctorPolling) return;
-
-    const loadAll = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/snapshots');
-        const data = await res.json();
-        setSnapshotGrid(data || []);
-      } catch (err) {
-        console.error('Failed to load snapshots', err);
-      }
-    };
-
-    loadAll();
-    const interval = setInterval(loadAll, 2000);
-    return () => clearInterval(interval);
-  }, [proctorPolling]);
-
   const fetchConfig = async () => {
     try {
       const response = await fetch('http://localhost:3001/api/config');
@@ -106,10 +85,19 @@ export default function Admin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ questionCount: defaultQuestionCount, examMinutes })
       });
-      if (!res.ok) throw new Error('Failed to save config');
-      Swal.fire({ title: 'Config saved', icon: 'success', timer: 1200, showConfirmButton: false });
-    } catch (err) {
-      Swal.fire({ title: 'Save failed', text: String(err), icon: 'error' });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to save config');
+      }
+      await res.json();
+      Swal.fire({ title: 'Config saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+    } catch (err: any) {
+      console.error('Save config error:', err);
+      Swal.fire({ 
+        title: 'Save failed', 
+        text: err.message || 'Could not connect to server. Is it running?',
+        icon: 'error' 
+      });
     }
   };
 
@@ -331,6 +319,16 @@ export default function Admin() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">Quiz App - Admin</h1>
                 <p className="text-gray-600 mt-1">Live monitoring dashboard</p>
+                <a
+                  href="/proctor"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
+                >
+                  <i className="bx bx-video"></i>
+                  Open Full Proctor Dashboard
+                  <i className="bx bx-link-external text-xs"></i>
+                </a>
               </div>
               <button
                 onClick={handleImportQuestions}
@@ -352,7 +350,23 @@ export default function Admin() {
                   min={1}
                   max={100}
                   value={defaultQuestionCount}
-                  onChange={(e) => setDefaultQuestionCount(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || val === '0') {
+                      setDefaultQuestionCount(1);
+                    } else {
+                      const num = Number(val);
+                      if (num >= 1 && num <= 100) {
+                        setDefaultQuestionCount(num);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && defaultQuestionCount < 10) {
+                      e.preventDefault();
+                      setDefaultQuestionCount(1);
+                    }
+                  }}
                   className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -367,7 +381,23 @@ export default function Admin() {
                   min={5}
                   max={300}
                   value={examMinutes}
-                  onChange={(e) => setExamMinutes(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || Number(val) < 5) {
+                      setExamMinutes(5);
+                    } else {
+                      const num = Number(val);
+                      if (num >= 5 && num <= 300) {
+                        setExamMinutes(num);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && examMinutes < 10) {
+                      e.preventDefault();
+                      setExamMinutes(5);
+                    }
+                  }}
                   className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
