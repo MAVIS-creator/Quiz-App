@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,13 +14,31 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize SQLite database
+let db;
 const dbPath = path.join(__dirname, 'quiz.db');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+
+// Helper to save DB to file
+const saveDB = () => {
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(dbPath, buffer);
+};
+
+// Helper to read DB from file
+const loadDB = async (SQL) => {
+  if (fs.existsSync(dbPath)) {
+    const data = fs.readFileSync(dbPath);
+    return new SQL.Database(new Uint8Array(data));
+  }
+  return new SQL.Database();
+};
+
+// Initialize database
+const SQL = await initSqlJs();
+db = await loadDB(SQL);
 
 // Create tables
-db.exec(`
+db.run(`
   CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -57,21 +76,23 @@ db.exec(`
     timestamp TEXT NOT NULL,
     read INTEGER DEFAULT 0
   );
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_identifier ON sessions(identifier);
-  CREATE INDEX IF NOT EXISTS idx_time_extensions_identifier ON time_extensions(identifier);
-  CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender, receiver);
 `);
 
+saveDB();
+
 // Seed default question count
-const existingConfig = db.prepare('SELECT value FROM config WHERE key = ?').get('question_count');
-if (!existingConfig) {
-  db.prepare('INSERT INTO config (key, value) VALUES (?, ?)').run('question_count', '40');
+const configResult = db.exec('SELECT value FROM config WHERE key = ?', ['question_count']);
+if (configResult.length === 0) {
+  db.run('INSERT INTO config (key, value) VALUES (?, ?)', ['question_count', '40']);
+  saveDB();
 }
 
 const getQuestionCount = () => {
-  const row = db.prepare('SELECT value FROM config WHERE key = ?').get('question_count');
-  return row ? Number(row.value) : 40;
+  const result = db.exec('SELECT value FROM config WHERE key = ?', ['question_count']);
+  if (result.length > 0 && result[0].values.length > 0) {
+    return Number(result[0].values[0][0]);
+  }
+  return 40;
 };
 
 // Helpers
@@ -85,12 +106,23 @@ const deserialize = (value) => {
 };
 
 const attachExtensions = (identifier) => {
-  return db.prepare(`
-    SELECT minutesAdded, reason, timestamp, acknowledged
-    FROM time_extensions
-    WHERE identifier = ?
-    ORDER BY timestamp DESC
-  `).all(identifier);
+  const result = db.exec(
+    `SELECT minutesAdded, reason, timestamp, acknowledged
+     FROM time_extensions
+     WHERE identifier = ?
+     ORDER BY timestamp DESC`,
+    [identifier]
+  );
+  
+  if (result.length === 0) return [];
+  
+  const cols = result[0].columns;
+  return result[0].values.map(row => ({
+    minutesAdded: row[cols.indexOf('minutesAdded')],
+    reason: row[cols.indexOf('reason')],
+    timestamp: row[cols.indexOf('timestamp')],
+    acknowledged: row[cols.indexOf('acknowledged')]
+  }));
 };
 
 // Routes
@@ -103,8 +135,13 @@ app.post('/api/question-count', (req, res) => {
   if (!questionCount || questionCount < 1 || questionCount > 100) {
     return res.status(400).json({ error: 'Invalid question count' });
   }
-  db.prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .run('question_count', String(questionCount));
+  
+  db.run(
+    'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+    ['question_count', String(questionCount)]
+  );
+  saveDB();
+  
   res.json({ success: true, questionCount });
 });
 
@@ -115,74 +152,88 @@ app.post('/api/sessions', (req, res) => {
     return res.status(400).json({ error: 'identifier required (matric or phone)' });
   }
 
-  db.prepare(`
-    INSERT INTO sessions (identifier, matric, phone, name, startTime, answers, questionTimings, violations, submitted, submittedAt, lastSaved, questionCount)
-    VALUES (@identifier, @matric, @phone, @name, @startTime, @answers, @questionTimings, @violations, @submitted, @submittedAt, @lastSaved, @questionCount)
-    ON CONFLICT(identifier) DO UPDATE SET
-      matric = excluded.matric,
-      phone = excluded.phone,
-      name = excluded.name,
-      startTime = excluded.startTime,
-      answers = excluded.answers,
-      questionTimings = excluded.questionTimings,
-      violations = excluded.violations,
-      submitted = excluded.submitted,
-      submittedAt = excluded.submittedAt,
-      lastSaved = excluded.lastSaved,
-      questionCount = excluded.questionCount
-  `).run({
+  db.run(`
+    INSERT OR REPLACE INTO sessions (identifier, matric, phone, name, startTime, answers, questionTimings, violations, submitted, submittedAt, lastSaved, questionCount)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
     identifier,
-    matric: session.matric ?? null,
-    phone: session.phone ?? null,
-    name: session.name ?? '',
-    startTime: session.startTime ?? new Date().toISOString(),
-    answers: serialize(session.answers),
-    questionTimings: serialize(session.questionTimings),
-    violations: session.violations ?? 0,
-    submitted: session.submitted ? 1 : 0,
-    submittedAt: session.submittedAt ?? null,
-    lastSaved: session.lastSaved ?? new Date().toISOString(),
-    questionCount: session.questionCount ?? null
-  });
+    session.matric ?? null,
+    session.phone ?? null,
+    session.name ?? '',
+    session.startTime ?? new Date().toISOString(),
+    serialize(session.answers),
+    serialize(session.questionTimings),
+    session.violations ?? 0,
+    session.submitted ? 1 : 0,
+    session.submittedAt ?? null,
+    session.lastSaved ?? new Date().toISOString(),
+    session.questionCount ?? null
+  ]);
 
+  saveDB();
   res.json({ success: true });
 });
 
 app.get('/api/sessions', (req, res) => {
-  const rows = db.prepare('SELECT * FROM sessions').all();
-  const sessions = rows.map((row) => ({
-    matric: row.matric,
-    phone: row.phone,
-    name: row.name,
-    startTime: row.startTime,
-    answers: deserialize(row.answers),
-    questionTimings: deserialize(row.questionTimings),
-    violations: row.violations ?? 0,
-    submitted: !!row.submitted,
-    submittedAt: row.submittedAt,
-    lastSaved: row.lastSaved,
-    questionCount: row.questionCount ?? undefined,
-    timeExtensions: attachExtensions(row.matric || row.phone)
-  }));
+  const result = db.exec('SELECT * FROM sessions');
+  
+  if (result.length === 0) {
+    return res.json([]);
+  }
+
+  const cols = result[0].columns;
+  const sessions = result[0].values.map(row => {
+    const identifier = row[cols.indexOf('identifier')];
+    return {
+      matric: row[cols.indexOf('matric')],
+      phone: row[cols.indexOf('phone')],
+      name: row[cols.indexOf('name')],
+      startTime: row[cols.indexOf('startTime')],
+      answers: deserialize(row[cols.indexOf('answers')]),
+      questionTimings: deserialize(row[cols.indexOf('questionTimings')]),
+      violations: row[cols.indexOf('violations')] ?? 0,
+      submitted: !!row[cols.indexOf('submitted')],
+      submittedAt: row[cols.indexOf('submittedAt')],
+      lastSaved: row[cols.indexOf('lastSaved')],
+      questionCount: row[cols.indexOf('questionCount')] ?? undefined,
+      timeExtensions: attachExtensions(identifier)
+    };
+  });
+
   res.json(sessions);
 });
 
 app.get('/api/time-extension/:identifier', (req, res) => {
   const { identifier } = req.params;
-  const ext = db.prepare(`
+  const result = db.exec(`
     SELECT minutesAdded, reason, timestamp, acknowledged
     FROM time_extensions
     WHERE identifier = ? AND acknowledged = 0
     ORDER BY timestamp DESC
     LIMIT 1
-  `).get(identifier);
-  res.json(ext || null);
+  `, [identifier]);
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return res.json(null);
+  }
+
+  const cols = result[0].columns;
+  const row = result[0].values[0];
+  res.json({
+    minutesAdded: row[cols.indexOf('minutesAdded')],
+    reason: row[cols.indexOf('reason')],
+    timestamp: row[cols.indexOf('timestamp')],
+    acknowledged: row[cols.indexOf('acknowledged')]
+  });
 });
 
 app.post('/api/time-extension/acknowledge', (req, res) => {
   const { identifier } = req.body;
   if (!identifier) return res.status(400).json({ error: 'identifier required' });
-  db.prepare('UPDATE time_extensions SET acknowledged = 1 WHERE identifier = ?').run(identifier);
+  
+  db.run('UPDATE time_extensions SET acknowledged = 1 WHERE identifier = ?', [identifier]);
+  saveDB();
+  
   res.json({ success: true });
 });
 
@@ -191,10 +242,13 @@ app.post('/api/time-extension', (req, res) => {
   if (!identifier || !minutesAdded) {
     return res.status(400).json({ error: 'identifier and minutesAdded required' });
   }
-  db.prepare(`
+  
+  db.run(`
     INSERT INTO time_extensions (identifier, minutesAdded, reason, timestamp, acknowledged)
     VALUES (?, ?, ?, ?, 0)
-  `).run(identifier, minutesAdded, reason ?? '', new Date().toISOString());
+  `, [identifier, minutesAdded, reason ?? '', new Date().toISOString()]);
+
+  saveDB();
   res.json({ success: true });
 });
 
@@ -203,21 +257,38 @@ app.post('/api/messages', (req, res) => {
   if (!sender || !receiver || !body) {
     return res.status(400).json({ error: 'sender, receiver and body are required' });
   }
-  db.prepare(`
+  
+  db.run(`
     INSERT INTO messages (sender, receiver, body, timestamp, read)
     VALUES (?, ?, ?, ?, 0)
-  `).run(sender, receiver, body, new Date().toISOString());
+  `, [sender, receiver, body, new Date().toISOString()]);
+
+  saveDB();
   res.json({ success: true });
 });
 
 app.get('/api/messages/:sender/:receiver', (req, res) => {
   const { sender, receiver } = req.params;
-  const msgs = db.prepare(`
+  const result = db.exec(`
     SELECT sender, receiver, body, timestamp, read
     FROM messages
     WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
     ORDER BY timestamp ASC
-  `).all(sender, receiver, receiver, sender);
+  `, [sender, receiver, receiver, sender]);
+
+  if (result.length === 0) {
+    return res.json([]);
+  }
+
+  const cols = result[0].columns;
+  const msgs = result[0].values.map(row => ({
+    sender: row[cols.indexOf('sender')],
+    receiver: row[cols.indexOf('receiver')],
+    body: row[cols.indexOf('body')],
+    timestamp: row[cols.indexOf('timestamp')],
+    read: !!row[cols.indexOf('read')]
+  }));
+
   res.json(msgs);
 });
 
@@ -226,7 +297,10 @@ app.post('/api/messages/mark-read', (req, res) => {
   if (!sender || !receiver) {
     return res.status(400).json({ error: 'sender and receiver required' });
   }
-  db.prepare('UPDATE messages SET read = 1 WHERE sender = ? AND receiver = ?').run(sender, receiver);
+  
+  db.run('UPDATE messages SET read = 1 WHERE sender = ? AND receiver = ?', [sender, receiver]);
+  saveDB();
+  
   res.json({ success: true });
 });
 
