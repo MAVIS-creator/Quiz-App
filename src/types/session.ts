@@ -24,6 +24,7 @@ export type SessionData = {
   lastSaved?: string;
   questionCount?: number;
   questionIds?: number[];
+  examMinutes?: number;
 };
 
 export type ParticipantStats = {

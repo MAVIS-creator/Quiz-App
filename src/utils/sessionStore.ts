@@ -1,3 +1,4 @@
+import { questions } from '../data/questions';
 import type { SessionData, ParticipantStats, TimeExtension } from '../types/session';
 
 const API_BASE = 'http://localhost:3001/api';
@@ -21,8 +22,8 @@ export const calculateStats = (session: SessionData): ParticipantStats => {
   let correctAnswers = 0;
 
   if (session.questionIds && Array.isArray(session.questionIds)) {
-    session.questionIds.forEach((id, idx) => {
-      const q = questions.find(q => q.id === id);
+    session.questionIds.forEach((id: number, idx: number) => {
+      const q = questions.find((q: any) => q.id === id);
       const ans = (session.answers || {})[idx];
       if (q && ans && q.answer === ans) correctAnswers++;
     });

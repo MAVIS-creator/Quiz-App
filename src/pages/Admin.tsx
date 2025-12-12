@@ -12,8 +12,11 @@ export default function Admin() {
   const [messages, setMessages] = useState<any[]>([]);
   const [messageText, setMessageText] = useState('');
   const [defaultQuestionCount, setDefaultQuestionCount] = useState(40);
+  const [examMinutes, setExamMinutes] = useState(60);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [snapshotUpdated, setSnapshotUpdated] = useState<string | null>(null);
+  const [snapshotGrid, setSnapshotGrid] = useState<any[]>([]);
+  const [proctorPolling, setProctorPolling] = useState(true);
 
   const isSessionOnline = (session?: SessionData | null) => {
     if (!session || session.submitted) return false;
@@ -26,7 +29,7 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
-      fetchQuestionCount();
+      fetchConfig();
       const interval = setInterval(loadData, 3000);
       return () => clearInterval(interval);
     }
@@ -62,17 +65,51 @@ export default function Admin() {
     };
 
     loadSnapshot();
-    const interval = setInterval(loadSnapshot, 5000);
+    const interval = setInterval(loadSnapshot, 1000);
     return () => clearInterval(interval);
   }, [selectedParticipant]);
 
-  const fetchQuestionCount = async () => {
+  // Proctor grid polling (all snapshots) with toggle
+  useEffect(() => {
+    if (!proctorPolling) return;
+
+    const loadAll = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/snapshots');
+        const data = await res.json();
+        setSnapshotGrid(data || []);
+      } catch (err) {
+        console.error('Failed to load snapshots', err);
+      }
+    };
+
+    loadAll();
+    const interval = setInterval(loadAll, 2000);
+    return () => clearInterval(interval);
+  }, [proctorPolling]);
+
+  const fetchConfig = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/question-count');
+      const response = await fetch('http://localhost:3001/api/config');
       const data = await response.json();
-      setDefaultQuestionCount(data.questionCount);
+      setDefaultQuestionCount(data.questionCount || 40);
+      setExamMinutes(data.examMinutes || 60);
     } catch (error) {
-      console.error('Failed to fetch question count:', error);
+      console.error('Failed to fetch config:', error);
+    }
+  };
+
+  const saveConfig = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionCount: defaultQuestionCount, examMinutes })
+      });
+      if (!res.ok) throw new Error('Failed to save config');
+      Swal.fire({ title: 'Config saved', icon: 'success', timer: 1200, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: 'Save failed', text: String(err), icon: 'error' });
     }
   };
 
@@ -289,67 +326,118 @@ export default function Admin() {
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4 text-gray-800">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">Quiz App - Admin</h1>
-              <p className="text-gray-600 mt-1">Live monitoring dashboard</p>
-            </div>
-            <button
-              onClick={handleImportQuestions}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              <i className="bx bx-import"></i>
-              Import Questions
-            </button>
-            
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <i className="bx bx-list-ol text-blue-500"></i>
-                Default Questions per Quiz
-              </label>
-              <select
-                aria-label="Default Questions per Quiz"
-                value={defaultQuestionCount}
-                onChange={async (e) => {
-                  const count = Number(e.target.value);
-                  setDefaultQuestionCount(count);
-                  
-                  try {
-                    await fetch('http://localhost:3001/api/question-count', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ questionCount: count })
-                    });
-                    
-                    Swal.fire({
-                      icon: 'success',
-                      title: 'Updated',
-                      text: `Default question count set to ${count}`,
-                      timer: 1500,
-                      showConfirmButton: false
-                    });
-                  } catch (error) {
-                    Swal.fire({
-                      icon: 'error',
-                      title: 'Error',
-                      text: 'Failed to update question count. Make sure the backend server is running.',
-                      confirmButtonColor: '#ef4444'
-                    });
-                  }
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center gap-4 flex-wrap">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">Quiz App - Admin</h1>
+                <p className="text-gray-600 mt-1">Live monitoring dashboard</p>
+              </div>
+              <button
+                onClick={handleImportQuestions}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
-                <option value={10}>10 Questions</option>
-                <option value={20}>20 Questions</option>
-                <option value={30}>30 Questions</option>
-                <option value={40}>40 Questions</option>
-                <option value={50}>50 Questions</option>
-                <option value={100}>100 Questions (All)</option>
-              </select>
+                <i className="bx bx-import"></i>
+                Import Questions
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label htmlFor="question-count" className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <i className="bx bx-list-ol text-blue-500"></i>
+                  Questions
+                </label>
+                <input
+                  id="question-count"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={defaultQuestionCount}
+                  onChange={(e) => setDefaultQuestionCount(Number(e.target.value))}
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="exam-time" className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <i className="bx bx-time text-blue-500"></i>
+                  Time (min)
+                </label>
+                <input
+                  id="exam-time"
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={examMinutes}
+                  onChange={(e) => setExamMinutes(Number(e.target.value))}
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={saveConfig}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+              >
+                Save Config
+              </button>
             </div>
           </div>
         </div>
 
+        {/* Proctor Mode (low data) */}
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Proctor Mode (Low-Data)</h2>
+              <p className="text-sm text-gray-600">Rapid snapshots (~2 fps) per participant with lightweight previews.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={proctorPolling} onChange={(e) => setProctorPolling(e.target.checked)} />
+                Auto-refresh
+              </label>
+              <button
+                onClick={() => setProctorPolling(true)}
+                className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Refresh now
+              </button>
+            </div>
+          </div>
+
+          {snapshotGrid.length === 0 && (
+            <p className="text-sm text-gray-600">No snapshots yet. They will appear as participants grant camera access.</p>
+          )}
+
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {snapshotGrid.map((snap, idx) => {
+              const session = sessions.find(s => (s.matric || s.phone) === snap.identifier);
+              const stat = stats.find(s => (s.matric || s.phone) === snap.identifier);
+              const isOnline = isSessionOnline(session);
+              return (
+                <div key={snap.identifier || idx} className="border rounded-lg overflow-hidden shadow-sm bg-gray-50">
+                  <div className="flex items-center justify-between px-3 py-2 bg-white border-b">
+                    <div>
+                      <p className="text-sm font-semibold">{stat?.name || snap.identifier}</p>
+                      <p className="text-[11px] text-gray-500">{snap.identifier}</p>
+                    </div>
+                    <span className={`px-2 py-1 text-[11px] rounded-full ${isOnline ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'}`}>
+                      {isOnline ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                  <div className="h-40 bg-black flex items-center justify-center">
+                    {snap.image ? (
+                      <img src={snap.image} alt="Live" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-gray-300">No feed</span>
+                    )}
+                  </div>
+                  <div className="px-3 py-2 text-[11px] text-gray-600 flex justify-between">
+                    <span>Updated: {snap.timestamp ? new Date(snap.timestamp).toLocaleTimeString() : '—'}</span>
+                    <span>{stat ? `${stat.progress}%` : ''}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center gap-3">
@@ -500,8 +588,8 @@ export default function Admin() {
 
               <div className="p-4 border-b flex items-center gap-4 bg-gray-50">
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-700">Camera Preview</p>
-                  <p className="text-xs text-gray-500">Updates every 5 seconds</p>
+                  <p className="text-sm font-semibold text-gray-700">Live Camera Preview</p>
+                  <p className="text-xs text-gray-500">Refreshes ~1s for near-real-time view</p>
                   <p className="text-[11px] text-gray-500 mt-1">{snapshotUpdated ? `Last snapshot: ${new Date(snapshotUpdated).toLocaleTimeString()}` : 'No snapshot yet'}</p>
                 </div>
                 <div className="w-40 h-28 bg-gray-200 rounded overflow-hidden flex items-center justify-center border">

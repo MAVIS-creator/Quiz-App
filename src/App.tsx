@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Quiz from './pages/Quiz';
 import Admin from './pages/Admin';
+import ProctorDashboard from './pages/ProctorDashboard';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/quiz" element={<Quiz />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/proctor" element={<ProctorDashboard />} />
       </Routes>
     </BrowserRouter>
   );

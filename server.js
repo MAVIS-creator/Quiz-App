@@ -4,15 +4,46 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import initSqlJs from 'sql.js';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3001;
+const uploadDir = path.join(__dirname, 'uploads/evidence');
+
+// Ensure upload directory exists
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Setup multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = file.mimetype.split('/')[1];
+    cb(null, `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
+// HTTP and WebSocket setup
+const httpServer = createServer(app);
+const io = new SocketServer(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+
+// In-memory violation tracking (per exam session)
+const violations = new Map();
+const activeStudents = new Map();
 
 let db;
 const dbPath = path.join(__dirname, 'quiz.db');
@@ -56,7 +87,8 @@ db.run(`
     submitted INTEGER DEFAULT 0,
     submittedAt TEXT,
     lastSaved TEXT,
-    questionCount INTEGER
+    questionCount INTEGER,
+    examMinutes INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS time_extensions (
@@ -80,10 +112,24 @@ db.run(`
 
 saveDB();
 
+// Simple migrations
+try {
+  db.run('ALTER TABLE sessions ADD COLUMN examMinutes INTEGER');
+} catch (err) {
+  // ignore if exists
+}
+
 // Seed default question count
 const configResult = db.exec('SELECT value FROM config WHERE key = ?', ['question_count']);
 if (configResult.length === 0) {
   db.run('INSERT INTO config (key, value) VALUES (?, ?)', ['question_count', '40']);
+  saveDB();
+}
+
+// Seed default exam minutes
+const examMinutesResult = db.exec('SELECT value FROM config WHERE key = ?', ['exam_minutes']);
+if (examMinutesResult.length === 0) {
+  db.run('INSERT INTO config (key, value) VALUES (?, ?)', ['exam_minutes', '60']);
   saveDB();
 }
 
@@ -93,6 +139,14 @@ const getQuestionCount = () => {
     return Number(result[0].values[0][0]);
   }
   return 40;
+};
+
+const getExamMinutes = () => {
+  const result = db.exec('SELECT value FROM config WHERE key = ?', ['exam_minutes']);
+  if (result.length > 0 && result[0].values.length > 0) {
+    return Number(result[0].values[0][0]);
+  }
+  return 60;
 };
 
 // Helpers
@@ -148,6 +202,30 @@ app.post('/api/question-count', (req, res) => {
   res.json({ success: true, questionCount });
 });
 
+// Combined config (question count + exam minutes)
+app.get('/api/config', (req, res) => {
+  res.json({
+    questionCount: getQuestionCount(),
+    examMinutes: getExamMinutes(),
+  });
+});
+
+app.post('/api/config', (req, res) => {
+  const { questionCount, examMinutes } = req.body;
+  if (!questionCount || questionCount < 1 || questionCount > 100) {
+    return res.status(400).json({ error: 'Invalid question count' });
+  }
+  if (!examMinutes || examMinutes < 5 || examMinutes > 300) {
+    return res.status(400).json({ error: 'Invalid exam minutes (5-300 allowed)' });
+  }
+
+  db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['question_count', String(questionCount)]);
+  db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['exam_minutes', String(examMinutes)]);
+  saveDB();
+
+  res.json({ success: true, questionCount, examMinutes });
+});
+
 app.post('/api/sessions', (req, res) => {
   const session = req.body;
   const identifier = session.matric || session.phone;
@@ -156,8 +234,8 @@ app.post('/api/sessions', (req, res) => {
   }
 
   db.run(`
-    INSERT OR REPLACE INTO sessions (identifier, matric, phone, name, startTime, answers, questionTimings, violations, submitted, submittedAt, lastSaved, questionCount)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO sessions (identifier, matric, phone, name, startTime, answers, questionTimings, violations, submitted, submittedAt, lastSaved, questionCount, examMinutes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     identifier,
     session.matric ?? null,
@@ -170,7 +248,8 @@ app.post('/api/sessions', (req, res) => {
     session.submitted ? 1 : 0,
     session.submittedAt ?? null,
     session.lastSaved ?? new Date().toISOString(),
-    session.questionCount ?? null
+    session.questionCount ?? null,
+    session.examMinutes ?? null
   ]);
 
   saveDB();
@@ -199,6 +278,7 @@ app.get('/api/sessions', (req, res) => {
       submittedAt: row[cols.indexOf('submittedAt')],
       lastSaved: row[cols.indexOf('lastSaved')],
       questionCount: row[cols.indexOf('questionCount')] ?? undefined,
+      examMinutes: row[cols.indexOf('examMinutes')] ?? undefined,
       timeExtensions: attachExtensions(identifier)
     };
   });
@@ -330,6 +410,105 @@ app.get('/api/snapshot/:identifier', (req, res) => {
   res.json(snap);
 });
 
+// All snapshots (for proctor grid)
+app.get('/api/snapshots', (req, res) => {
+  const all = Array.from(snapshots.entries()).map(([identifier, snap]) => ({
+    identifier,
+    image: snap.image,
+    timestamp: snap.timestamp,
+  }));
+  res.json(all);
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
+});
+
+// Socket.io events
+io.on('connection', (socket) => {
+  console.log(`Student connected: ${socket.id}`);
+
+  socket.on('student_join', (data) => {
+    const identifier = data.identifier || socket.id;
+    activeStudents.set(identifier, { socketId: socket.id, joinedAt: new Date() });
+    violations.set(identifier, []);
+  });
+
+  socket.on('violation_alert', (data) => {
+    const identifier = data.identifier;
+    if (violations.has(identifier)) {
+      violations.get(identifier).push({
+        type: data.violationType,
+        timestamp: data.timestamp,
+        severity: data.severity,
+        evidence: data.evidence
+      });
+    }
+
+    // Broadcast to admin dashboard
+    io.to('admin').emit('violation_update', {
+      identifier,
+      violations: violations.get(identifier) || []
+    });
+  });
+
+  socket.on('punishment_command', (data) => {
+    const targetSocket = activeStudents.get(data.identifier)?.socketId;
+    if (targetSocket) {
+      io.to(targetSocket).emit('receive_punishment', {
+        type: data.punishmentType,
+        value: data.value,
+        message: data.message
+      });
+    }
+  });
+
+  socket.on('admin_join', () => {
+    socket.join('admin');
+    socket.emit('active_students', Array.from(activeStudents.entries()).map(([id, data]) => ({
+      identifier: id,
+      violations: violations.get(id) || []
+    })));
+  });
+
+  socket.on('disconnect', () => {
+    for (const [id, data] of activeStudents) {
+      if (data.socketId === socket.id) {
+        activeStudents.delete(id);
+        violations.delete(id);
+      }
+    }
+  });
+});
+
+// REST API for evidence upload
+app.post('/api/evidence/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file provided' });
+  }
+
+  res.json({
+    success: true,
+    filename: req.file.filename,
+    path: `/evidence/${req.file.filename}`,
+    size: req.file.size
+  });
+});
+
+// Serve uploaded evidence
+app.use('/evidence', express.static(uploadDir));
+
+// Get all violations for admin
+app.get('/api/violations', (req, res) => {
+  const allViolations = Array.from(violations.entries()).map(([id, vios]) => ({
+    identifier: id,
+    violationCount: vios.length,
+    violations: vios
+  }));
+  res.json(allViolations);
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`Backend server running on http://localhost:${PORT}`);
+  console.log(`WebSocket server ready for proctoring`);
 });

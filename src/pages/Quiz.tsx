@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { questions } from '../data/questions';
 import { saveSession, getPendingExtension, acknowledgeExtension } from '../utils/sessionStore';
+import { useSmartProctor } from '../hooks/useSmartProctor';
 import type { QuestionTiming } from '../types/session';
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -21,24 +22,35 @@ export default function Quiz() {
   const [timeLeft, setTimeLeft] = useState(3600);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [violations, setViolations] = useState(0);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [shuffledOptions, setShuffledOptions] = useState<any[]>([]);
   const [questionTimings, setQuestionTimings] = useState<QuestionTiming[]>([]);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [questionIds, setQuestionIds] = useState<number[]>([]);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [snapshotPreview, setSnapshotPreview] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  const sessionData = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
+
+  // Smart Proctor system
+  const {
+    videoRef: proctorVideoRef,
+    violations: proctorViolations,
+    alertMessage,
+    startMonitoring,
+    setAlertMessage,
+  } = useSmartProctor(sessionData?.matric || sessionData?.phone || null, true);
+
   useEffect(() => {
-    const fetchQuestionCount = async () => {
+    const fetchConfig = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/question-count');
+        const response = await fetch('http://localhost:3001/api/config');
         const data = await response.json();
         const count = data.questionCount || 40;
+        const examMinutes = data.examMinutes || 60;
         setQuestionCount(count);
-        
+        setTimeLeft(examMinutes * 60);
+
         const shuffled = shuffleArray(questions).slice(0, count);
         setQuizQuestions(shuffled);
         setQuestionIds(shuffled.map(q => q.id));
@@ -55,13 +67,13 @@ export default function Quiz() {
       }
     };
     
-    fetchQuestionCount();
+    fetchConfig();
     const countInterval = setInterval(() => {
-      fetch('http://localhost:3001/api/question-count')
+      fetch('http://localhost:3001/api/config')
         .then(res => res.json())
         .then(data => {
           const newCount = data.questionCount || 40;
-          // Only re-seed if no answers yet to avoid wiping work
+          const newExamMinutes = data.examMinutes || 60;
           if (answers && Object.keys(answers).length === 0 && newCount !== questionCount) {
             setQuestionCount(newCount);
             const shuffled = shuffleArray(questions).slice(0, newCount);
@@ -69,6 +81,12 @@ export default function Quiz() {
             setQuestionIds(shuffled.map(q => q.id));
             setShuffledOptions(shuffled.map(q => shuffleArray(q.options)));
           }
+          // Only adjust time if we are early in the exam to avoid jarring resets
+          setTimeLeft(prev => {
+            const target = newExamMinutes * 60;
+            if (prev > target) return target; // cap at configured time
+            return prev;
+          });
         })
         .catch(() => {});
     }, 5000);
@@ -76,8 +94,6 @@ export default function Quiz() {
     return () => clearInterval(countInterval);
   }, [answers, questionCount]);
 
-  const sessionData = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
-  
   useEffect(() => {
     if (!sessionData) {
       navigate('/');
@@ -88,10 +104,11 @@ export default function Quiz() {
     saveSession({
       ...sessionData,
       answers,
-      violations,
+      violations: proctorViolations.length,
       questionTimings,
       questionCount,
       questionIds,
+      examMinutes: Math.round(timeLeft / 60),
       lastSaved: new Date().toISOString()
     });
 
@@ -122,28 +139,27 @@ export default function Quiz() {
     // Visibility change detection
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        setViolations(prev => {
-          const newCount = prev + 1;
-          if (newCount >= 3) {
-            Swal.fire({
-              title: 'Quiz Terminated',
-              text: 'You have exceeded the maximum number of violations (switching tabs/windows).',
-              icon: 'error',
-              confirmButtonColor: '#ef4444'
-            }).then(() => {
+        setAlertMessage('⚠️ Tab switch detected - violation recorded!');
+        setTimeout(() => setAlertMessage(null), 3000);
+        if (proctorViolations.length >= 2) {
+          Swal.fire({
+            title: 'Quiz Terminated',
+            text: 'You have exceeded the maximum number of violations (switching tabs/windows).',
+            icon: 'error',
+            confirmButtonColor: '#ef4444'
+          }).then(() => {
               submitQuiz(true);
             });
           } else {
             Swal.fire({
               title: 'Warning!',
-              text: `Tab switch detected. Violation ${newCount} of 3.`,
+              text: `Tab switch detected. Violation ${proctorViolations.length + 1} of 3.`,
               icon: 'warning',
               confirmButtonColor: '#f59e0b',
               timer: 3000
             });
           }
-          return newCount;
-        });
+        }
       }
     };
 
@@ -175,7 +191,23 @@ export default function Quiz() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // Capture webcam snapshots for proctoring and send to admin
+  // Smart Proctor initialization
+  useEffect(() => {
+    if (sessionData && !cameraError) {
+      startMonitoring().catch((err) => {
+        console.error('Proctor startup error:', err);
+        setCameraError('Proctor system failed to initialize');
+      });
+    }
+  }, [sessionData]);
+
+  // Alert message cleanup
+  useEffect(() => {
+    if (alertMessage) {
+      const timer = setTimeout(() => setAlertMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [alertMessage, setAlertMessage]);
   useEffect(() => {
     if (!sessionData) return;
     let stream: MediaStream | null = null;
@@ -183,7 +215,14 @@ export default function Quiz() {
 
     const startCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 320, max: 480 },
+            height: { ideal: 240, max: 360 },
+            frameRate: { ideal: 2, max: 3 }
+          },
+          audio: false
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
@@ -199,7 +238,7 @@ export default function Quiz() {
           const ctx = canvas.getContext('2d');
           if (!ctx) return;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
           setSnapshotPreview(dataUrl);
 
           try {
@@ -217,7 +256,7 @@ export default function Quiz() {
         };
 
         capture();
-        captureInterval = window.setInterval(capture, 8000);
+        captureInterval = window.setInterval(capture, 500);
       } catch (err: any) {
         setCameraError(err?.message || 'Unable to access camera');
       }
@@ -244,13 +283,14 @@ export default function Quiz() {
           questionTimings,
           questionCount,
           questionIds,
+          examMinutes: Math.round(timeLeft / 60),
           lastSaved: new Date().toISOString()
         });
       }
     }, 5000);
 
     return () => clearInterval(saveInterval);
-  }, [answers, violations, questionTimings, sessionData, questionCount]);
+  }, [answers, proctorViolations, questionTimings, sessionData, questionCount]);
 
   const handleSelectOption = (option: string) => {
     // Record timing for this question
@@ -320,6 +360,7 @@ export default function Quiz() {
         questionTimings,
         questionCount,
         questionIds,
+        examMinutes: Math.round(timeLeft / 60),
         submitted: true,
         submittedAt: new Date().toISOString(),
         lastSaved: new Date().toISOString()
@@ -390,9 +431,9 @@ export default function Quiz() {
 
           {/* Progress Bar */}
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
+            <div
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${progress}%` } as React.CSSProperties}
             ></div>
           </div>
           <p className="text-sm text-gray-600 mt-2">
@@ -413,7 +454,7 @@ export default function Quiz() {
           </div>
 
           <div className="space-y-3">
-            {currentOptions.map((option, idx) => {
+            {currentOptions.map((option: string, idx: number) => {
               const isSelected = answers[currentQuestionIndex] === option;
               return (
                 <button
@@ -500,14 +541,20 @@ export default function Quiz() {
           <div className="flex items-center gap-3 bg-gray-50 border rounded-lg p-3 mb-4">
             <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-800">Camera monitoring is active</p>
-              <p className="text-xs text-gray-600">We periodically capture snapshots to keep the admin informed.</p>
-              {cameraError && <p className="text-xs text-red-600 mt-1">Camera issue: {cameraError}</p>}
+              <p className="text-sm font-semibold text-gray-800">Smart Proctor Active</p>
+              <p className="text-xs text-gray-600">AI monitoring for integrity • {proctorViolations.length} alert(s)</p>
+              {alertMessage && (
+                <p className="text-xs text-red-600 mt-1 font-semibold animate-pulse">{alertMessage}</p>
+              )}
+              {cameraError && <p className="text-xs text-orange-600 mt-1">⚠️ {cameraError}</p>}
             </div>
-            {snapshotPreview && (
-              <img src={snapshotPreview} alt="Latest snapshot" className="w-20 h-14 object-cover rounded border" />
+            {proctorViolations.length > 0 && (
+              <div className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold">
+                <i className="bx bx-alert"></i>
+                {proctorViolations.length}
+              </div>
             )}
-            <video ref={videoRef} className="hidden" playsInline muted></video>
+            <video ref={proctorVideoRef} className="hidden" playsInline muted></video>
           </div>
 
       {/* Footer */}
