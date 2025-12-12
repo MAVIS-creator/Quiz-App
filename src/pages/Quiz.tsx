@@ -148,17 +148,16 @@ export default function Quiz() {
             icon: 'error',
             confirmButtonColor: '#ef4444'
           }).then(() => {
-              submitQuiz(true);
-            });
-          } else {
-            Swal.fire({
-              title: 'Warning!',
-              text: `Tab switch detected. Violation ${proctorViolations.length + 1} of 3.`,
-              icon: 'warning',
-              confirmButtonColor: '#f59e0b',
-              timer: 3000
-            });
-          }
+            submitQuiz(true);
+          });
+        } else {
+          Swal.fire({
+            title: 'Warning!',
+            text: `Tab switch detected. Violation ${proctorViolations.length + 1} of 3.`,
+            icon: 'warning',
+            confirmButtonColor: '#f59e0b',
+            timer: 3000
+          });
         }
       }
     };
@@ -239,7 +238,6 @@ export default function Quiz() {
           if (!ctx) return;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
-          setSnapshotPreview(dataUrl);
 
           try {
             await fetch('http://localhost:3001/api/snapshot', {
@@ -279,7 +277,7 @@ export default function Quiz() {
         await saveSession({
           ...sessionData,
           answers,
-          violations,
+          violations: proctorViolations.length,
           questionTimings,
           questionCount,
           questionIds,
@@ -356,7 +354,7 @@ export default function Quiz() {
       saveSession({
         ...sessionData,
         answers,
-        violations,
+        violations: proctorViolations.length,
         questionTimings,
         questionCount,
         questionIds,
@@ -420,10 +418,10 @@ export default function Quiz() {
                   {formatTime(timeLeft)}
                 </span>
               </div>
-              {violations > 0 && (
+              {proctorViolations.length > 0 && (
                 <div className="flex items-center gap-1 text-red-600 text-sm mt-1">
                   <i className="bx bx-error-circle"></i>
-                  <span>Violations: {violations}/3</span>
+                  <span>Violations: {proctorViolations.length}/3</span>
                 </div>
               )}
             </div>

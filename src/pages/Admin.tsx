@@ -381,63 +381,6 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Proctor Mode (low data) */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Proctor Mode (Low-Data)</h2>
-              <p className="text-sm text-gray-600">Rapid snapshots (~2 fps) per participant with lightweight previews.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={proctorPolling} onChange={(e) => setProctorPolling(e.target.checked)} />
-                Auto-refresh
-              </label>
-              <button
-                onClick={() => setProctorPolling(true)}
-                className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Refresh now
-              </button>
-            </div>
-          </div>
-
-          {snapshotGrid.length === 0 && (
-            <p className="text-sm text-gray-600">No snapshots yet. They will appear as participants grant camera access.</p>
-          )}
-
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {snapshotGrid.map((snap, idx) => {
-              const session = sessions.find(s => (s.matric || s.phone) === snap.identifier);
-              const stat = stats.find(s => (s.matric || s.phone) === snap.identifier);
-              const isOnline = isSessionOnline(session);
-              return (
-                <div key={snap.identifier || idx} className="border rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                  <div className="flex items-center justify-between px-3 py-2 bg-white border-b">
-                    <div>
-                      <p className="text-sm font-semibold">{stat?.name || snap.identifier}</p>
-                      <p className="text-[11px] text-gray-500">{snap.identifier}</p>
-                    </div>
-                    <span className={`px-2 py-1 text-[11px] rounded-full ${isOnline ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'}`}>
-                      {isOnline ? 'Online' : 'Offline'}
-                    </span>
-                  </div>
-                  <div className="h-40 bg-black flex items-center justify-center">
-                    {snap.image ? (
-                      <img src={snap.image} alt="Live" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-xs text-gray-300">No feed</span>
-                    )}
-                  </div>
-                  <div className="px-3 py-2 text-[11px] text-gray-600 flex justify-between">
-                    <span>Updated: {snap.timestamp ? new Date(snap.timestamp).toLocaleTimeString() : '—'}</span>
-                    <span>{stat ? `${stat.progress}%` : ''}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center gap-3">

@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
   loadCocoModel,
+  loadFaceModel,
   detectObjectViolations,
   detectHeadTilt,
   detectAudioViolation,
   sendViolationAlert,
   captureScreenshot,
+  recordAudioClip,
   type ViolationType,
   type ProctorAlert,
 } from '../utils/proctoring';
@@ -21,6 +23,7 @@ export const useSmartProctor = (
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const cocoModelRef = useRef<any>(null);
+  const faceModelRef = useRef<any>(null);
 
   const [violations, setViolations] = useState<ProctorAlert[]>([]);
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -89,9 +92,12 @@ export const useSmartProctor = (
     if (!videoRef.current || !enabled) return;
 
     try {
-      // Load COCO model if needed
+      // Load models if needed
       if (!cocoModelRef.current) {
         cocoModelRef.current = await loadCocoModel();
+      }
+      if (!faceModelRef.current) {
+        faceModelRef.current = await loadFaceModel();
       }
 
       // Check for object violations
@@ -106,10 +112,13 @@ export const useSmartProctor = (
         }
       }
 
-      // Check head tilt
-      const { lookingAway } = detectHeadTilt(videoRef.current);
+      // Check head tilt and face presence
+      const { lookingAway, noFace } = await detectHeadTilt(videoRef.current, faceModelRef.current);
       if (lookingAway) {
         incrementViolationCounter('looking_away');
+      }
+      if (noFace) {
+        incrementViolationCounter('no_face');
       }
 
       // Check audio
@@ -151,11 +160,27 @@ export const useSmartProctor = (
     const screenshot = captureScreenshot(videoRef.current!);
     const severity = violationType === 'speaking' || violationType === 'phone' ? 'alert' : 'warning';
 
+    let evidence = screenshot;
+
+    // Record audio clip for speaking/whispering violations
+    if ((violationType === 'speaking' || violationType === 'whispering') && mediaRecorderRef.current) {
+      try {
+        const audioBlob = await recordAudioClip(mediaRecorderRef.current, 3000);
+        const reader = new FileReader();
+        evidence = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(audioBlob);
+        });
+      } catch (err) {
+        console.error('Audio recording failed:', err);
+      }
+    }
+
     const alert: ProctorAlert = {
       violationType,
       timestamp: new Date().toISOString(),
       severity,
-      evidence: screenshot,
+      evidence,
     };
 
     setViolations((prev) => [...prev, alert]);

@@ -1,4 +1,6 @@
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
+import '@tensorflow/tfjs-backend-webgl';
 import type { Socket } from 'socket.io-client';
 
 export type ViolationType = 'phone' | 'book' | 'person' | 'looking_away' | 'no_face' | 'speaking' | 'whispering';
@@ -11,7 +13,9 @@ export type ProctorAlert = {
 };
 
 let cocoModel: any = null;
+let faceModel: faceLandmarksDetection.FaceLandmarksDetector | null = null;
 let isModelLoaded = false;
+let isFaceModelLoaded = false;
 
 export const loadCocoModel = async () => {
   if (isModelLoaded) return cocoModel;
@@ -21,6 +25,24 @@ export const loadCocoModel = async () => {
     return cocoModel;
   } catch (err) {
     console.error('Failed to load COCO model:', err);
+    return null;
+  }
+};
+
+export const loadFaceModel = async () => {
+  if (isFaceModelLoaded) return faceModel;
+  try {
+    const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+    const detectorConfig: faceLandmarksDetection.MediaPipeFaceMeshMediaPipeModelConfig = {
+      runtime: 'mediapipe',
+      solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
+      refineLandmarks: true,
+    };
+    faceModel = await faceLandmarksDetection.createDetector(model, detectorConfig);
+    isFaceModelLoaded = true;
+    return faceModel;
+  } catch (err) {
+    console.error('Failed to load Face Landmarks model:', err);
     return null;
   }
 };
@@ -64,43 +86,90 @@ export const detectObjectViolations = async (
   }
 };
 
-export const detectHeadTilt = (videoElement: HTMLVideoElement): { lookingAway: boolean; direction: string } => {
-  // Simplified head tilt detection based on video frame analysis
-  // In production, use @tensorflow-models/face-landmarks-detection
-  const canvas = document.createElement('canvas');
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) return { lookingAway: false, direction: 'center' };
-
-  ctx.drawImage(videoElement, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-
-  // Detect skin tone on left vs right (simple heuristic)
-  let leftBrightness = 0,
-    rightBrightness = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i],
-      g = data[i + 1],
-      b = data[i + 2];
-    const brightness = (r + g + b) / 3;
-    const pixelIndex = i / 4;
-    const x = pixelIndex % canvas.width;
-
-    if (x < canvas.width / 2) {
-      leftBrightness += brightness;
-    } else {
-      rightBrightness += brightness;
-    }
+export const detectHeadTilt = async (
+  videoElement: HTMLVideoElement,
+  detector: faceLandmarksDetection.FaceLandmarksDetector | null
+): Promise<{ lookingAway: boolean; direction: string; noFace: boolean }> => {
+  if (!detector) {
+    return { lookingAway: false, direction: 'center', noFace: true };
   }
 
-  const diff = Math.abs(leftBrightness - rightBrightness);
-  const lookingAway = diff > 10000;
-  const direction = leftBrightness > rightBrightness ? 'left' : 'right';
+  try {
+    const faces = await detector.estimateFaces(videoElement, { flipHorizontal: false });
 
-  return { lookingAway, direction };
+    if (!faces || faces.length === 0) {
+      return { lookingAway: true, direction: 'unknown', noFace: true };
+    }
+
+    const face = faces[0];
+    const keypoints = face.keypoints;
+
+    // Get key facial landmarks for pose estimation
+    // Nose tip (1), Left eye (133), Right eye (362), Left ear (234), Right ear (454)
+    const noseTip = keypoints.find(kp => kp.name === 'noseTip') || keypoints[1];
+    const leftEye = keypoints.find(kp => kp.name === 'leftEye') || keypoints[133];
+    const rightEye = keypoints.find(kp => kp.name === 'rightEye') || keypoints[362];
+    const leftEar = keypoints[234];
+    const rightEar = keypoints[454];
+
+    if (!noseTip || !leftEye || !rightEye) {
+      return { lookingAway: false, direction: 'center', noFace: false };
+    }
+
+    // Calculate eye center
+    const eyeCenterX = (leftEye.x + rightEye.x) / 2;
+    const eyeCenterY = (leftEye.y + rightEye.y) / 2;
+
+    // Calculate horizontal deviation (nose relative to eye center)
+    const horizontalDeviation = noseTip.x - eyeCenterX;
+    const eyeDistance = Math.abs(rightEye.x - leftEye.x);
+
+    // Normalized deviation (as percentage of eye distance)
+    const normalizedDeviation = (horizontalDeviation / eyeDistance) * 100;
+
+    // Check for head rotation based on ear visibility and nose position
+    const leftEarVisible = leftEar && leftEar.x > 0;
+    const rightEarVisible = rightEar && rightEar.x > 0;
+
+    let direction = 'center';
+    let lookingAway = false;
+
+    // Threshold for looking away detection
+    const MILD_THRESHOLD = 15; // degrees equivalent
+
+    if (Math.abs(normalizedDeviation) > MILD_THRESHOLD) {
+      lookingAway = true;
+      if (normalizedDeviation > 0) {
+        direction = 'right';
+      } else {
+        direction = 'left';
+      }
+    }
+
+    // Additional check: if one ear is much more visible than the other
+    if (!leftEarVisible && rightEarVisible) {
+      lookingAway = true;
+      direction = 'right';
+    } else if (leftEarVisible && !rightEarVisible) {
+      lookingAway = true;
+      direction = 'left';
+    }
+
+    // Vertical check (looking up or down)
+    const verticalDeviation = noseTip.y - eyeCenterY;
+    const faceHeight = Math.abs(keypoints[10].y - keypoints[152].y); // forehead to chin
+    const normalizedVerticalDeviation = (verticalDeviation / faceHeight) * 100;
+
+    if (Math.abs(normalizedVerticalDeviation) > 25) {
+      lookingAway = true;
+      direction = normalizedVerticalDeviation > 0 ? 'down' : 'up';
+    }
+
+    return { lookingAway, direction, noFace: false };
+  } catch (err) {
+    console.error('Face detection error:', err);
+    return { lookingAway: false, direction: 'center', noFace: true };
+  }
 };
 
 export const detectAudioViolation = (
