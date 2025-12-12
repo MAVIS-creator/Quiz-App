@@ -22,6 +22,7 @@ export type SessionData = {
   submitted?: boolean;
   submittedAt?: string;
   lastSaved?: string;
+  questionCount?: number;
 };
 
 export type ParticipantStats = {

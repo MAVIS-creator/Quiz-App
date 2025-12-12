@@ -1,25 +1,56 @@
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { getAllSessions, calculateStats, addTimeExtension } from '../utils/sessionStore';
+import { getConversation, sendMessage } from '../utils/messaging';
 import type { SessionData, ParticipantStats } from '../types/session';
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [stats, setStats] = useState<ParticipantStats[]>([]);
+  const [selectedParticipant, setSelectedParticipant] = useState<ParticipantStats | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [defaultQuestionCount, setDefaultQuestionCount] = useState(40);
 
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
-      const interval = setInterval(loadData, 5000);
+      fetchQuestionCount();
+      const interval = setInterval(loadData, 3000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
 
-  const loadData = () => {
-    const allSessions = getAllSessions();
-    setSessions(allSessions);
-    setStats(allSessions.map(calculateStats));
+  useEffect(() => {
+    if (selectedParticipant) {
+      const conv = getConversation('admin', selectedParticipant.matric || selectedParticipant.phone);
+      setMessages(conv);
+    }
+  }, [selectedParticipant]);
+
+  const fetchQuestionCount = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/question-count');
+      const data = await response.json();
+      setDefaultQuestionCount(data.questionCount);
+    } catch (error) {
+      console.error('Failed to fetch question count:', error);
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/sessions');
+      const allSessions = await response.json();
+      setSessions(allSessions);
+      setStats(allSessions.map(calculateStats));
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+      const allSessions = getAllSessions();
+      setSessions(allSessions);
+      setStats(allSessions.map(calculateStats));
+    }
   };
 
   const handleLogin = () => {
@@ -72,7 +103,7 @@ export default function Admin() {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Reason</label>
-            <textarea id="time-reason" class="swal2-textarea" placeholder="Reason for extension (required)"></textarea>
+            <textarea id="time-reason" class="swal2-textarea" placeholder="Reason for extension"></textarea>
           </div>
         </div>
       `,
@@ -89,7 +120,7 @@ export default function Admin() {
           return false;
         }
         if (!reason) {
-          Swal.showValidationMessage('Please provide a reason for the extension');
+          Swal.showValidationMessage('Please provide a reason');
           return false;
         }
         
@@ -99,38 +130,27 @@ export default function Admin() {
       if (result.isConfirmed && result.value) {
         const identifier = participant.matric || participant.phone;
         addTimeExtension(identifier, result.value.minutes, result.value.reason);
-        
-        Swal.fire({
-          title: 'Time Extended!',
-          html: `<p>Added <strong>${result.value.minutes} minutes</strong> to ${participant.name}'s quiz.</p>`,
-          icon: 'success',
-          confirmButtonColor: '#10b981'
-        });
-        
         loadData();
       }
     });
   };
 
+  const handleSendMessage = () => {
+    if (!messageText.trim() || !selectedParticipant) return;
+    
+    const identifier = selectedParticipant.matric || selectedParticipant.phone;
+    sendMessage('admin', identifier, messageText);
+    setMessageText('');
+    const conv = getConversation('admin', identifier);
+    setMessages(conv);
+  };
+
   const handleImportQuestions = () => {
     Swal.fire({
-      title: 'Import Questions from Markdown',
-      html: `
-        <div class="text-left space-y-3">
-          <p class="text-sm text-gray-600">Upload a .md file with questions in this format:</p>
-          <pre class="bg-gray-100 p-3 rounded text-xs overflow-x-auto">## Category Name
-1. Question text here?
-   - Option A
-   - Option B
-   - Option C
-   - Option D
-   Answer: Option A</pre>
-          <input type="file" id="md-file" accept=".md" class="block w-full text-sm text-gray-600">
-        </div>
-      `,
+      title: 'Import Questions',
+      html: `<input type="file" id="md-file" accept=".md" class="block w-full text-sm text-gray-600">`,
       showCancelButton: true,
-      confirmButtonText: 'Parse File',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: 'Parse',
       confirmButtonColor: '#3b82f6',
       preConfirm: () => {
         const fileInput = document.getElementById('md-file') as HTMLInputElement;
@@ -150,13 +170,8 @@ export default function Admin() {
           const parsed = parseMarkdownQuestions(content);
           
           Swal.fire({
-            title: 'Parsed Questions',
-            html: `
-              <div class="text-left">
-                <p class="mb-3">Found <strong>${parsed.length}</strong> questions. Copy the JSON below:</p>
-                <textarea readonly class="w-full h-64 p-3 border rounded font-mono text-xs">${JSON.stringify(parsed, null, 2)}</textarea>
-              </div>
-            `,
+            title: `Found ${parsed.length} Questions`,
+            html: `<textarea readonly class="w-full h-64 p-3 border rounded font-mono text-xs">${JSON.stringify(parsed, null, 2)}</textarea>`,
             confirmButtonText: 'Close',
             confirmButtonColor: '#3b82f6',
             width: '800px'
@@ -183,13 +198,13 @@ export default function Admin() {
       if (line.startsWith('## ')) {
         currentCategory = line.substring(3).trim();
       } else if (/^\d+\.\s/.test(line)) {
-        if (currentQuestion && currentOptions.length > 0 && currentAnswer) {
+        if (currentQuestion && currentOptions.length > 0) {
           questions.push({
             id: questionId++,
             category: currentCategory,
-            question: currentQuestion,
+            prompt: currentQuestion,
             options: currentOptions,
-            correctAnswer: currentAnswer
+            answer: currentAnswer || currentOptions[0]
           });
         }
         currentQuestion = line.replace(/^\d+\.\s/, '');
@@ -202,13 +217,13 @@ export default function Admin() {
       }
     }
 
-    if (currentQuestion && currentOptions.length > 0 && currentAnswer) {
+    if (currentQuestion && currentOptions.length > 0) {
       questions.push({
         id: questionId,
         category: currentCategory,
-        question: currentQuestion,
+        prompt: currentQuestion,
         options: currentOptions,
-        correctAnswer: currentAnswer
+        answer: currentAnswer || currentOptions[0]
       });
     }
 
@@ -221,7 +236,7 @@ export default function Admin() {
         <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
           <i className="bx bx-lock-alt text-6xl text-purple-500 mb-4"></i>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Panel</h1>
-          <p className="text-gray-600 mb-6">Login required to access quiz analytics</p>
+          <p className="text-gray-600 mb-6">Login required</p>
           <button
             onClick={handleLogin}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold"
@@ -237,34 +252,75 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                <i className="bx bx-bar-chart-alt-2 text-purple-500"></i>
-                Quiz Analytics Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">Monitor participant progress and performance</p>
+              <h1 className="text-3xl font-bold text-gray-800">Quiz App - Admin</h1>
+              <p className="text-gray-600 mt-1">Live monitoring dashboard</p>
             </div>
             <button
               onClick={handleImportQuestions}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
             >
               <i className="bx bx-import"></i>
               Import Questions
             </button>
+            
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <i className="bx bx-list-ol text-blue-500"></i>
+                Default Questions per Quiz
+              </label>
+              <select
+                aria-label="Default Questions per Quiz"
+                value={defaultQuestionCount}
+                onChange={async (e) => {
+                  const count = Number(e.target.value);
+                  setDefaultQuestionCount(count);
+                  
+                  try {
+                    await fetch('http://localhost:3001/api/question-count', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ questionCount: count })
+                    });
+                    
+                    Swal.fire({
+                      icon: 'success',
+                      title: 'Updated',
+                      text: `Default question count set to ${count}`,
+                      timer: 1500,
+                      showConfirmButton: false
+                    });
+                  } catch (error) {
+                    Swal.fire({
+                      icon: 'error',
+                      title: 'Error',
+                      text: 'Failed to update question count. Make sure the backend server is running.',
+                      confirmButtonColor: '#ef4444'
+                    });
+                  }
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value={10}>10 Questions</option>
+                <option value={20}>20 Questions</option>
+                <option value={30}>30 Questions</option>
+                <option value={40}>40 Questions</option>
+                <option value={50}>50 Questions</option>
+                <option value={100}>100 Questions (All)</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center gap-3">
               <i className="bx bx-user-check text-3xl text-blue-500"></i>
               <div>
-                <p className="text-sm text-gray-600">Total Participants</p>
-                <p className="text-2xl font-bold text-gray-800">{sessions.length}</p>
+                <p className="text-sm text-gray-600">Participants</p>
+                <p className="text-2xl font-bold">{sessions.length}</p>
               </div>
             </div>
           </div>
@@ -273,9 +329,7 @@ export default function Admin() {
               <i className="bx bx-check-circle text-3xl text-green-500"></i>
               <div>
                 <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-gray-800">
-                  {sessions.filter(s => s.submitted).length}
-                </p>
+                <p className="text-2xl font-bold">{sessions.filter(s => s.submitted).length}</p>
               </div>
             </div>
           </div>
@@ -283,10 +337,8 @@ export default function Admin() {
             <div className="flex items-center gap-3">
               <i className="bx bx-time-five text-3xl text-yellow-500"></i>
               <div>
-                <p className="text-sm text-gray-600">In Progress</p>
-                <p className="text-2xl font-bold text-gray-800">
-                  {sessions.filter(s => !s.submitted).length}
-                </p>
+                <p className="text-sm text-gray-600">Active</p>
+                <p className="text-2xl font-bold">{sessions.filter(s => !s.submitted).length}</p>
               </div>
             </div>
           </div>
@@ -294,118 +346,140 @@ export default function Admin() {
             <div className="flex items-center gap-3">
               <i className="bx bx-error-circle text-3xl text-red-500"></i>
               <div>
-                <p className="text-sm text-gray-600">Avg Violations</p>
-                <p className="text-2xl font-bold text-gray-800">
-                  {(sessions.reduce((sum, s) => sum + s.violations, 0) / sessions.length || 0).toFixed(1)}
+                <p className="text-sm text-gray-600">Violations</p>
+                <p className="text-2xl font-bold">
+                  {(sessions.reduce((sum, s) => sum + s.violations, 0) / Math.max(sessions.length, 1)).toFixed(1)}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Participant Table */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Participant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Progress
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Accuracy
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Avg Time/Q
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Violations
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {stats.map((participant, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <i className="bx bx-user-circle text-2xl text-gray-400"></i>
-                        <div>
-                          <p className="font-medium text-gray-900">{participant.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {participant.matric || participant.phone}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${participant.progress}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm text-gray-600">{participant.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`font-semibold ${
-                        participant.accuracy >= 70 ? 'text-green-600' :
-                        participant.accuracy >= 50 ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {participant.accuracy}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                      {participant.avgTimePerQuestion}s
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        participant.violations === 0 ? 'bg-green-100 text-green-800' :
-                        participant.violations < 3 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {participant.violations}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {participant.submitted ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                          Submitted
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          Active
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {!participant.submitted && (
-                        <button
-                          onClick={() => handleAddTime(participant)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                        >
-                          <i className="bx bx-plus-circle"></i>
-                          Add Time
-                        </button>
-                      )}
-                    </td>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6 border-b">
+              <h2 className="text-lg font-semibold">Live Participant Monitor</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Progress</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Questions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Accuracy</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {stats.map((p, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold cursor-pointer hover:ring-2 hover:ring-blue-500"
+                            style={{ backgroundColor: `hsl(${(idx * 45) % 360}, 70%, 60%)` }}
+                            onClick={() => setSelectedParticipant(p)}
+                            title="Click to message"
+                          >
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-medium">{p.name}</p>
+                            <p className="text-xs text-gray-600">{p.matric || p.phone}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2">
+                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${p.progress}%` }}></div>
+                          </div>
+                          <span className="text-sm">{p.progress}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium">
+                          {sessions.find(s => (s.matric || s.phone) === (p.matric || p.phone))?.questionCount || 40}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-semibold">{p.accuracy}%</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                          p.submitted ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {p.submitted ? 'Done' : 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 space-y-1">
+                        {!p.submitted && (
+                          <button
+                            onClick={() => handleAddTime(p)}
+                            className="block w-full px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                          >
+                            Add Time
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedParticipant(p)}
+                          className="w-full px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                          Message
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {selectedParticipant && (
+            <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col max-h-96">
+              <div className="p-4 border-b bg-blue-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)` }}>
+                    {selectedParticipant.name.charAt(0).toUpperCase()}
+                  </div>
+                  <p className="font-semibold">{selectedParticipant.name}</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.from === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                      m.from === 'admin' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-900'
+                    }`}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-3 border-t flex gap-2">
+                <input
+                  type="text"
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Message..."
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button onClick={handleSendMessage} title="Send message" className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
+                  <i className="bx bx-send"></i>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      <div className="mt-12 text-center pb-4">
+        <p className="text-sm text-gray-600">
+          © 2025 <span className="bg-gradient-to-r from-yellow-400 to-blue-400 bg-clip-text text-transparent font-semibold">MAVIS</span>. All rights reserved.
+        </p>
       </div>
     </div>
   );

@@ -16,16 +16,42 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export default function Quiz() {
   const navigate = useNavigate();
-  const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes
+  const [questionCount, setQuestionCount] = useState(40);
+  const [isLoading, setIsLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(3600);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [violations, setViolations] = useState(0);
-  const [quizQuestions] = useState(() => shuffleArray(questions).slice(0, 40));
-  const [shuffledOptions] = useState(() => 
-    quizQuestions.map(q => shuffleArray(q.options))
-  );
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  const [shuffledOptions, setShuffledOptions] = useState<any[]>([]);
   const [questionTimings, setQuestionTimings] = useState<QuestionTiming[]>([]);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+
+  useEffect(() => {
+    const fetchQuestionCount = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/question-count');
+        const data = await response.json();
+        const count = data.questionCount || 40;
+        setQuestionCount(count);
+        
+        const shuffled = shuffleArray(questions).slice(0, count);
+        setQuizQuestions(shuffled);
+        setShuffledOptions(shuffled.map(q => shuffleArray(q.options)));
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch question count:', error);
+        const count = 40;
+        setQuestionCount(count);
+        const shuffled = shuffleArray(questions).slice(0, count);
+        setQuizQuestions(shuffled);
+        setShuffledOptions(shuffled.map(q => shuffleArray(q.options)));
+        setIsLoading(false);
+      }
+    };
+    
+    fetchQuestionCount();
+  }, []);
 
   const sessionData = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
   
@@ -124,13 +150,14 @@ export default function Quiz() {
           answers,
           violations,
           questionTimings,
+          questionCount,
           lastSaved: new Date().toISOString()
         });
       }
     }, 10000);
 
     return () => clearInterval(saveInterval);
-  }, [answers, violations, questionTimings, sessionData]);
+  }, [answers, violations, questionTimings, sessionData, questionCount]);
 
   const handleSelectOption = (option: string) => {
     // Record timing for this question
@@ -198,6 +225,7 @@ export default function Quiz() {
         answers,
         violations,
         questionTimings,
+        questionCount,
         submitted: true,
         submittedAt: new Date().toISOString(),
         lastSaved: new Date().toISOString()
@@ -228,6 +256,17 @@ export default function Quiz() {
   const currentQuestion = quizQuestions[currentQuestionIndex];
   const currentOptions = shuffledOptions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / quizQuestions.length) * 100;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+          <i className="bx bx-loader-alt bx-spin text-6xl text-blue-500 mb-4"></i>
+          <p className="text-lg text-gray-700">Loading quiz...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
@@ -363,6 +402,13 @@ export default function Quiz() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="mt-8 text-center pb-4">
+        <p className="text-sm text-gray-600">
+          © 2025 <span className="bg-gradient-to-r from-yellow-400 to-blue-400 bg-clip-text text-transparent font-semibold">MAVIS</span>. All rights reserved.
+        </p>
+      </footer>
     </div>
   );
 }
