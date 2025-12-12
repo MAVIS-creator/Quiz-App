@@ -4,16 +4,16 @@ import { participants } from '../data/participants';
 import Swal from 'sweetalert2';
 
 export default function Login() {
-  const [matricInput, setMatricInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
+  const [credential, setCredential] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = () => {
+    const raw = credential.trim();
     const clean = (value: string) => value.replace(/\s+/g, '').toLowerCase();
     const cleanDigits = (value: string) => value.replace(/\D/g, '');
 
-    const normalizedMatric = clean(matricInput);
-    const normalizedPhone = cleanDigits(phoneInput);
+    const normalizedMatric = clean(raw);
+    const normalizedPhone = cleanDigits(raw);
 
     const found = participants.find((p) => {
       const matricMatch = p.matric ? clean(p.matric) === normalizedMatric : false;
@@ -31,7 +31,20 @@ export default function Login() {
       return;
     }
 
+    const sessionPayload = {
+      matric: found.matric,
+      phone: found.phone,
+      name: found.name,
+      startTime: new Date().toISOString(),
+      answers: {},
+      questionTimings: [],
+      violations: 0,
+      submitted: false
+    };
+
+    sessionStorage.setItem('quizSession', JSON.stringify(sessionPayload));
     localStorage.setItem('currentUser', JSON.stringify(found));
+    setCredential('');
     navigate('/quiz');
   };
 
@@ -46,27 +59,14 @@ export default function Login() {
             <div className="space-y-2">
               <label className="text-sm text-slate-300 flex items-center gap-2">
                 <i className="bx bx-id-card text-brand-400"></i>
-                Matric number
+                Matric or phone
               </label>
               <input
-                value={matricInput}
-                onChange={(e) => setMatricInput(e.target.value)}
+                value={credential}
+                onChange={(e) => setCredential(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-slate-100 focus:border-brand-400 focus:outline-none"
-                placeholder="e.g. 2025000831"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-slate-300 flex items-center gap-2">
-                <i className="bx bx-phone text-brand-400"></i>
-                Phone (digits only)
-              </label>
-              <input
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-slate-100 focus:border-brand-400 focus:outline-none"
-                placeholder="e.g. 8084434242"
+                placeholder="e.g. 2025000831 or 8084434242"
               />
             </div>
           </div>

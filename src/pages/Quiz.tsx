@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { questions } from '../data/questions';
@@ -26,6 +26,10 @@ export default function Quiz() {
   const [shuffledOptions, setShuffledOptions] = useState<any[]>([]);
   const [questionTimings, setQuestionTimings] = useState<QuestionTiming[]>([]);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [questionIds, setQuestionIds] = useState<number[]>([]);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [snapshotPreview, setSnapshotPreview] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const fetchQuestionCount = async () => {
@@ -37,6 +41,7 @@ export default function Quiz() {
         
         const shuffled = shuffleArray(questions).slice(0, count);
         setQuizQuestions(shuffled);
+        setQuestionIds(shuffled.map(q => q.id));
         setShuffledOptions(shuffled.map(q => shuffleArray(q.options)));
         setIsLoading(false);
       } catch (error) {
@@ -51,7 +56,25 @@ export default function Quiz() {
     };
     
     fetchQuestionCount();
-  }, []);
+    const countInterval = setInterval(() => {
+      fetch('http://localhost:3001/api/question-count')
+        .then(res => res.json())
+        .then(data => {
+          const newCount = data.questionCount || 40;
+          // Only re-seed if no answers yet to avoid wiping work
+          if (answers && Object.keys(answers).length === 0 && newCount !== questionCount) {
+            setQuestionCount(newCount);
+            const shuffled = shuffleArray(questions).slice(0, newCount);
+            setQuizQuestions(shuffled);
+            setQuestionIds(shuffled.map(q => q.id));
+            setShuffledOptions(shuffled.map(q => shuffleArray(q.options)));
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(countInterval);
+  }, [answers, questionCount]);
 
   const sessionData = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
   
@@ -60,6 +83,17 @@ export default function Quiz() {
       navigate('/');
       return;
     }
+
+    // Initial save so admin sees participant immediately
+    saveSession({
+      ...sessionData,
+      answers,
+      violations,
+      questionTimings,
+      questionCount,
+      questionIds,
+      lastSaved: new Date().toISOString()
+    });
 
     // Check for pending time extensions
     const checkExtension = async () => {
@@ -141,20 +175,79 @@ export default function Quiz() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
+  // Capture webcam snapshots for proctoring and send to admin
   useEffect(() => {
-    // Save session every 10 seconds
-    const saveInterval = setInterval(() => {
+    if (!sessionData) return;
+    let stream: MediaStream | null = null;
+    let captureInterval: number | undefined;
+
+    const startCamera = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        const capture = async () => {
+          const video = videoRef.current;
+          if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = Math.max(180, Math.round((video.videoHeight / video.videoWidth) * 320));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          setSnapshotPreview(dataUrl);
+
+          try {
+            await fetch('http://localhost:3001/api/snapshot', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                identifier: sessionData.matric || sessionData.phone,
+                image: dataUrl,
+              })
+            });
+          } catch (err) {
+            // ignore upload errors to avoid breaking quiz
+          }
+        };
+
+        capture();
+        captureInterval = window.setInterval(capture, 8000);
+      } catch (err: any) {
+        setCameraError(err?.message || 'Unable to access camera');
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      if (captureInterval) clearInterval(captureInterval);
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [sessionData]);
+
+  useEffect(() => {
+    // Save session every 5 seconds for near real-time admin view
+    const saveInterval = setInterval(async () => {
       if (sessionData) {
-        saveSession({
+        await saveSession({
           ...sessionData,
           answers,
           violations,
           questionTimings,
           questionCount,
+          questionIds,
           lastSaved: new Date().toISOString()
         });
       }
-    }, 10000);
+    }, 5000);
 
     return () => clearInterval(saveInterval);
   }, [answers, violations, questionTimings, sessionData, questionCount]);
@@ -226,6 +319,7 @@ export default function Quiz() {
         violations,
         questionTimings,
         questionCount,
+        questionIds,
         submitted: true,
         submittedAt: new Date().toISOString(),
         lastSaved: new Date().toISOString()
@@ -402,6 +496,19 @@ export default function Quiz() {
           </div>
         </div>
       </div>
+
+          <div className="flex items-center gap-3 bg-gray-50 border rounded-lg p-3 mb-4">
+            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-800">Camera monitoring is active</p>
+              <p className="text-xs text-gray-600">We periodically capture snapshots to keep the admin informed.</p>
+              {cameraError && <p className="text-xs text-red-600 mt-1">Camera issue: {cameraError}</p>}
+            </div>
+            {snapshotPreview && (
+              <img src={snapshotPreview} alt="Latest snapshot" className="w-20 h-14 object-cover rounded border" />
+            )}
+            <video ref={videoRef} className="hidden" playsInline muted></video>
+          </div>
 
       {/* Footer */}
       <footer className="mt-8 text-center pb-4">

@@ -12,7 +12,7 @@ const app = express();
 const PORT = 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 let db;
 const dbPath = path.join(__dirname, 'quiz.db');
@@ -124,6 +124,9 @@ const attachExtensions = (identifier) => {
     acknowledged: row[cols.indexOf('acknowledged')]
   }));
 };
+
+// In-memory camera snapshots (per session)
+const snapshots = new Map();
 
 // Routes
 app.get('/api/question-count', (req, res) => {
@@ -302,6 +305,29 @@ app.post('/api/messages/mark-read', (req, res) => {
   saveDB();
   
   res.json({ success: true });
+});
+
+// Camera snapshot upload
+app.post('/api/snapshot', (req, res) => {
+  const { identifier, image } = req.body;
+  if (!identifier || !image) {
+    return res.status(400).json({ error: 'identifier and image required' });
+  }
+
+  // Basic size guard (image should be data URL string)
+  if (typeof image !== 'string' || image.length > 500_000) {
+    return res.status(400).json({ error: 'image too large or invalid' });
+  }
+
+  snapshots.set(identifier, { image, timestamp: new Date().toISOString() });
+  res.json({ success: true });
+});
+
+// Latest camera snapshot fetch
+app.get('/api/snapshot/:identifier', (req, res) => {
+  const snap = snapshots.get(req.params.identifier);
+  if (!snap) return res.json({ image: null, timestamp: null });
+  res.json(snap);
 });
 
 app.listen(PORT, () => {

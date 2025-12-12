@@ -18,8 +18,15 @@ export const getAllSessions = async (): Promise<SessionData[]> => {
 
 export const calculateStats = (session: SessionData): ParticipantStats => {
   const answered = Object.keys(session.answers || {}).length;
-  // Accuracy cannot be computed without the question set; report 0 for now
-  const correctAnswers = 0;
+  let correctAnswers = 0;
+
+  if (session.questionIds && Array.isArray(session.questionIds)) {
+    session.questionIds.forEach((id, idx) => {
+      const q = questions.find(q => q.id === id);
+      const ans = (session.answers || {})[idx];
+      if (q && ans && q.answer === ans) correctAnswers++;
+    });
+  }
 
   const totalTimeSpent = (session.questionTimings || []).reduce(
     (sum, timing) => sum + timing.timeSpent,
@@ -31,8 +38,8 @@ export const calculateStats = (session: SessionData): ParticipantStats => {
       ? Math.round(totalTimeSpent / (session.questionTimings || []).length)
       : 0;
 
-  const denominator = session.questionCount || 40;
-  const progress = answered > 0 ? Math.round((answered / denominator) * 100) : 0;
+  const denominator = session.questionIds?.length || session.questionCount || 40;
+  const progress = answered > 0 && denominator > 0 ? Math.round((answered / denominator) * 100) : 0;
 
   return {
     name: session.name,

@@ -23,6 +23,7 @@ export type SessionData = {
   submittedAt?: string;
   lastSaved?: string;
   questionCount?: number;
+  questionIds?: number[];
 };
 
 export type ParticipantStats = {

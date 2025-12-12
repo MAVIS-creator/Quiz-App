@@ -12,6 +12,16 @@ export default function Admin() {
   const [messages, setMessages] = useState<any[]>([]);
   const [messageText, setMessageText] = useState('');
   const [defaultQuestionCount, setDefaultQuestionCount] = useState(40);
+  const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [snapshotUpdated, setSnapshotUpdated] = useState<string | null>(null);
+
+  const isSessionOnline = (session?: SessionData | null) => {
+    if (!session || session.submitted) return false;
+    if (!session.lastSaved) return false;
+    const last = new Date(session.lastSaved).getTime();
+    if (Number.isNaN(last)) return false;
+    return Date.now() - last <= 15000; // consider offline after 15s without save
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -29,6 +39,31 @@ export default function Admin() {
         setMessages(conv);
       })();
     }
+  }, [selectedParticipant]);
+
+  // Poll camera snapshot for the selected participant
+  useEffect(() => {
+    if (!selectedParticipant) {
+      setSnapshot(null);
+      setSnapshotUpdated(null);
+      return;
+    }
+
+    const identifier = selectedParticipant.matric || selectedParticipant.phone;
+    const loadSnapshot = async () => {
+      try {
+        const res = await fetch(`http://localhost:3001/api/snapshot/${identifier}`);
+        const data = await res.json();
+        setSnapshot(data.image || null);
+        setSnapshotUpdated(data.timestamp || null);
+      } catch (err) {
+        console.error('Failed to load snapshot', err);
+      }
+    };
+
+    loadSnapshot();
+    const interval = setInterval(loadSnapshot, 5000);
+    return () => clearInterval(interval);
   }, [selectedParticipant]);
 
   const fetchQuestionCount = async () => {
@@ -251,7 +286,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4 text-gray-800">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center">
@@ -339,7 +374,7 @@ export default function Admin() {
               <i className="bx bx-time-five text-3xl text-yellow-500"></i>
               <div>
                 <p className="text-sm text-gray-600">Active</p>
-                <p className="text-2xl font-bold">{sessions.filter(s => !s.submitted).length}</p>
+                <p className="text-2xl font-bold">{sessions.filter(isSessionOnline).length}</p>
               </div>
             </div>
           </div>
@@ -376,59 +411,75 @@ export default function Admin() {
                 <tbody className="divide-y">
                   {stats.map((p, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold cursor-pointer hover:ring-2 hover:ring-blue-500"
-                            style={{ backgroundColor: `hsl(${(idx * 45) % 360}, 70%, 60%)` }}
-                            onClick={() => setSelectedParticipant(p)}
-                            title="Click to message"
-                          >
-                            {p.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium">{p.name}</p>
-                            <p className="text-xs text-gray-600">{p.matric || p.phone}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 bg-gray-200 rounded-full h-2">
-                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${p.progress}%` }}></div>
-                          </div>
-                          <span className="text-sm">{p.progress}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-medium">
-                          {sessions.find(s => (s.matric || s.phone) === (p.matric || p.phone))?.questionCount || 40}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold">{p.accuracy}%</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
-                          p.submitted ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {p.submitted ? 'Done' : 'Active'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 space-y-1">
-                        {!p.submitted && (
-                          <button
-                            onClick={() => handleAddTime(p)}
-                            className="block w-full px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
-                          >
-                            Add Time
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setSelectedParticipant(p)}
-                          className="w-full px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                        >
-                          Message
-                        </button>
-                      </td>
+                      {(() => {
+                        const session = sessions.find(s => (s.matric || s.phone) === (p.matric || p.phone));
+                        const isOnline = isSessionOnline(session);
+                        const statusLabel = session?.submitted ? 'Done' : isOnline ? 'Active' : 'Offline';
+                        const statusClass = session?.submitted
+                          ? 'bg-green-100 text-green-800'
+                          : isOnline
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-200 text-gray-700';
+                        const lastSeen = session?.lastSaved ? new Date(session.lastSaved).toLocaleTimeString() : '—';
+                        return (
+                          <>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold cursor-pointer hover:ring-2 hover:ring-blue-500"
+                                  style={{ backgroundColor: `hsl(${(idx * 45) % 360}, 70%, 60%)` }}
+                                  onClick={() => setSelectedParticipant(p)}
+                                  title="Click to message"
+                                >
+                                  {p.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{p.name}</p>
+                                  <p className="text-xs text-gray-600">{p.matric || p.phone}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 bg-gray-200 rounded-full h-2">
+                                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${p.progress}%` }}></div>
+                                </div>
+                                <span className="text-sm">{p.progress}%</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-medium">
+                                {sessions.find(s => (s.matric || s.phone) === (p.matric || p.phone))?.questionCount || 40}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-semibold">{p.accuracy}%</td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <span className={`px-2 py-1 text-xs rounded-full font-semibold ${statusClass}`}>
+                                  {statusLabel}
+                                </span>
+                                <span className="text-[10px] text-gray-500 mt-1">Last seen: {lastSeen}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 space-y-1">
+                              {!p.submitted && (
+                                <button
+                                  onClick={() => handleAddTime(p)}
+                                  className="block w-full px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                                >
+                                  Add Time
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setSelectedParticipant(p)}
+                                className="w-full px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                              >
+                                Message
+                              </button>
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </tbody>
@@ -447,16 +498,35 @@ export default function Admin() {
                 </div>
               </div>
 
+              <div className="p-4 border-b flex items-center gap-4 bg-gray-50">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-700">Camera Preview</p>
+                  <p className="text-xs text-gray-500">Updates every 5 seconds</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{snapshotUpdated ? `Last snapshot: ${new Date(snapshotUpdated).toLocaleTimeString()}` : 'No snapshot yet'}</p>
+                </div>
+                <div className="w-40 h-28 bg-gray-200 rounded overflow-hidden flex items-center justify-center border">
+                  {snapshot ? (
+                    <img src={snapshot} alt="Participant camera" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-gray-600">No feed</span>
+                  )}
+                </div>
+              </div>
+
               <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.from === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                      m.from === 'admin' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-900'
-                    }`}>
-                      {m.text}
+                {messages.map((m) => {
+                  const from = m.from ?? m.sender;
+                  const isAdmin = from === 'admin';
+                  return (
+                    <div key={m.id || m.timestamp} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                        isAdmin ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-900'
+                      }`}>
+                        {m.text ?? m.body}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="p-3 border-t flex gap-2">
