@@ -12,6 +12,7 @@ import {
   type ViolationType,
   type ProctorAlert,
 } from '../utils/proctoring';
+import { WS_BASE } from '../utils/api';
 
 export const useSmartProctor = (
   sessionIdentifier: string | null,
@@ -36,7 +37,7 @@ export const useSmartProctor = (
     if (!enabled || !sessionIdentifier) return;
 
     // Initialize Socket.io
-    socketRef.current = io('http://localhost:3001', {
+    socketRef.current = io(WS_BASE, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,

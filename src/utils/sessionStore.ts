@@ -1,7 +1,6 @@
 import { questions } from '../data/questions';
 import type { SessionData, ParticipantStats, TimeExtension } from '../types/session';
-
-const API_BASE = 'http://localhost:3001/api';
+import { API_BASE } from './api';
 
 export const saveSession = async (session: SessionData) => {
   await fetch(`${API_BASE}/sessions`, {

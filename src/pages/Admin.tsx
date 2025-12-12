@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { getAllSessions, calculateStats, addTimeExtension } from '../utils/sessionStore';
+import { API_BASE } from '../utils/api';
 import { getConversation, sendMessage } from '../utils/messaging';
 import type { SessionData, ParticipantStats } from '../types/session';
 
@@ -69,7 +70,7 @@ export default function Admin() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/config');
+      const response = await fetch(`${API_BASE}/config`);
       const data = await response.json();
       setDefaultQuestionCount(data.questionCount || 40);
       setExamMinutes(data.examMinutes || 60);
@@ -80,7 +81,7 @@ export default function Admin() {
 
   const saveConfig = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/config', {
+      const res = await fetch(`${API_BASE}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ questionCount: defaultQuestionCount, examMinutes })

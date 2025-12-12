@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import { questions } from '../data/questions';
 import { saveSession, getPendingExtension, acknowledgeExtension } from '../utils/sessionStore';
 import { useSmartProctor } from '../hooks/useSmartProctor';
+import { API_BASE } from '../utils/api';
 import type { QuestionTiming } from '../types/session';
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -44,7 +45,7 @@ export default function Quiz() {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/config');
+        const response = await fetch(`${API_BASE}/config`);
         const data = await response.json();
         const count = data.questionCount || 40;
         const examMinutes = data.examMinutes || 60;
@@ -69,7 +70,7 @@ export default function Quiz() {
     
     fetchConfig();
     const countInterval = setInterval(() => {
-      fetch('http://localhost:3001/api/config')
+      fetch(`${API_BASE}/config`)
         .then(res => res.json())
         .then(data => {
           const newCount = data.questionCount || 40;
@@ -240,7 +241,7 @@ export default function Quiz() {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
 
           try {
-            await fetch('http://localhost:3001/api/snapshot', {
+            await fetch(`${API_BASE}/snapshot`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

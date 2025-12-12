@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { WS_BASE } from '../utils/api';
 import Swal from 'sweetalert2';
 
 type Violation = {
@@ -21,7 +22,7 @@ export default function ProctorDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
-    const socket = io('http://localhost:3001', {
+    const socket = io(WS_BASE, {
       reconnection: true,
       reconnectionAttempts: 5,
     });

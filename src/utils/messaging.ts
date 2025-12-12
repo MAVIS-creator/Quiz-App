@@ -6,7 +6,7 @@ export type Message = {
   read: boolean;
 };
 
-const API_BASE = 'http://localhost:3001/api';
+import { API_BASE } from './api';
 
 export const sendMessage = async (from: string, to: string, text: string) => {
   await fetch(`${API_BASE}/messages`, {
