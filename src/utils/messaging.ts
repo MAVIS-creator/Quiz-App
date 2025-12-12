@@ -1,52 +1,38 @@
 export type Message = {
-  id: string;
-  from: string; // admin or participant identifier
-  to: string; // recipient identifier
-  text: string;
+  sender: string;
+  receiver: string;
+  body: string;
   timestamp: string;
   read: boolean;
 };
 
-const MESSAGES_KEY = 'quiz_messages';
+const API_BASE = 'http://localhost:3001/api';
 
-export const sendMessage = (from: string, to: string, text: string) => {
-  const messages = getMessages();
-  const newMessage: Message = {
-    id: `msg_${Date.now()}`,
-    from,
-    to,
-    text,
-    timestamp: new Date().toISOString(),
-    read: false
-  };
-  messages.push(newMessage);
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
-  return newMessage;
+export const sendMessage = async (from: string, to: string, text: string) => {
+  await fetch(`${API_BASE}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sender: from, receiver: to, body: text })
+  });
 };
 
-export const getMessages = (): Message[] => {
-  const data = localStorage.getItem(MESSAGES_KEY);
-  return data ? JSON.parse(data) : [];
+export const getConversation = async (participant1: string, participant2: string): Promise<Message[]> => {
+  const res = await fetch(`${API_BASE}/messages/${participant1}/${participant2}`);
+  if (!res.ok) return [];
+  return await res.json();
 };
 
-export const getConversation = (participant1: string, participant2: string): Message[] => {
-  const messages = getMessages();
-  return messages.filter(
-    m =>
-      (m.from === participant1 && m.to === participant2) ||
-      (m.from === participant2 && m.to === participant1)
-  );
+export const markAsRead = async (sender: string, receiver: string) => {
+  await fetch(`${API_BASE}/messages/mark-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sender, receiver })
+  });
 };
 
-export const markAsRead = (messageId: string) => {
-  const messages = getMessages();
-  const updated = messages.map(m =>
-    m.id === messageId ? { ...m, read: true } : m
-  );
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(updated));
-};
-
-export const getUnreadCount = (userId: string): number => {
-  const messages = getMessages();
-  return messages.filter(m => m.to === userId && !m.read).length;
+export const getUnreadCount = async (userId: string): Promise<number> => {
+  const res = await fetch(`${API_BASE}/messages/${userId}/admin`);
+  if (!res.ok) return 0;
+  const msgs: Message[] = await res.json();
+  return msgs.filter(m => m.receiver === userId && !m.read).length;
 };

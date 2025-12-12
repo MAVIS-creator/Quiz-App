@@ -1,59 +1,38 @@
 import type { SessionData, ParticipantStats, TimeExtension } from '../types/session';
-import { questions } from '../data/questions';
 
-const SESSIONS_KEY = 'quiz_sessions';
-const EXTENSIONS_KEY = 'time_extensions';
+const API_BASE = 'http://localhost:3001/api';
 
-export const saveSession = (session: SessionData) => {
-  const identifier = session.matric || session.phone;
-  const data = localStorage.getItem(SESSIONS_KEY);
-  const sessions: Record<string, SessionData> = data ? JSON.parse(data) : {};
-  sessions[identifier] = session;
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+export const saveSession = async (session: SessionData) => {
+  await fetch(`${API_BASE}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(session)
+  });
 };
 
-export const getSession = (identifier: string): SessionData | null => {
-  const data = localStorage.getItem(SESSIONS_KEY);
-  const sessions: Record<string, SessionData> = data ? JSON.parse(data) : {};
-  return sessions[identifier] || null;
-};
-
-export const getAllSessions = (): SessionData[] => {
-  const data = localStorage.getItem(SESSIONS_KEY);
-  const sessionsObj: Record<string, SessionData> = data ? JSON.parse(data) : {};
-  return Object.values(sessionsObj);
-};
-
-export const clearSession = (identifier: string) => {
-  const data = localStorage.getItem(SESSIONS_KEY);
-  const sessions: Record<string, SessionData> = data ? JSON.parse(data) : {};
-  delete sessions[identifier];
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+export const getAllSessions = async (): Promise<SessionData[]> => {
+  const res = await fetch(`${API_BASE}/sessions`);
+  if (!res.ok) throw new Error('Failed to load sessions');
+  return await res.json();
 };
 
 export const calculateStats = (session: SessionData): ParticipantStats => {
-  const answered = Object.keys(session.answers).length;
-  let correctAnswers = 0;
+  const answered = Object.keys(session.answers || {}).length;
+  // Accuracy cannot be computed without the question set; report 0 for now
+  const correctAnswers = 0;
 
-  // Calculate accuracy based on answers
-  Object.entries(session.answers).forEach(([, answer]) => {
-    const question = questions.find(q => q.id === parseInt('1'));
-    if (question && question.answer === answer) {
-      correctAnswers++;
-    }
-  });
-
-  const totalTimeSpent = session.questionTimings.reduce(
+  const totalTimeSpent = (session.questionTimings || []).reduce(
     (sum, timing) => sum + timing.timeSpent,
     0
   );
 
   const avgTimePerQuestion =
-    session.questionTimings.length > 0
-      ? Math.round(totalTimeSpent / session.questionTimings.length)
+    (session.questionTimings || []).length > 0
+      ? Math.round(totalTimeSpent / (session.questionTimings || []).length)
       : 0;
 
-  const progress = answered > 0 ? Math.round((answered / 40) * 100) : 0;
+  const denominator = session.questionCount || 40;
+  const progress = answered > 0 ? Math.round((answered / denominator) * 100) : 0;
 
   return {
     name: session.name,
@@ -67,45 +46,24 @@ export const calculateStats = (session: SessionData): ParticipantStats => {
   };
 };
 
-export const addTimeExtension = (identifier: string, minutes: number, reason: string) => {
-  const extensions = getTimeExtensions();
-  if (!extensions[identifier]) {
-    extensions[identifier] = [];
-  }
-  
-  const extension: TimeExtension = {
-    minutesAdded: minutes,
-    reason,
-    timestamp: new Date().toISOString(),
-    acknowledged: false
-  };
-  
-  extensions[identifier].push(extension);
-  localStorage.setItem(EXTENSIONS_KEY, JSON.stringify(extensions));
+export const addTimeExtension = async (identifier: string, minutes: number, reason: string) => {
+  await fetch(`${API_BASE}/time-extension`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, minutesAdded: minutes, reason })
+  });
 };
 
-export const getTimeExtensions = (): Record<string, TimeExtension[]> => {
-  const data = localStorage.getItem(EXTENSIONS_KEY);
-  return data ? JSON.parse(data) : {};
+export const getPendingExtension = async (identifier: string): Promise<TimeExtension | null> => {
+  const res = await fetch(`${API_BASE}/time-extension/${identifier}`);
+  if (!res.ok) return null;
+  return await res.json();
 };
 
-export const getPendingExtension = (identifier: string): TimeExtension | null => {
-  const extensions = getTimeExtensions();
-  const userExtensions = extensions[identifier] || [];
-  
-  const pending = userExtensions.find(ext => !ext.acknowledged);
-  return pending || null;
-};
-
-export const acknowledgeExtension = (identifier: string) => {
-  const extensions = getTimeExtensions();
-  const userExtensions = extensions[identifier] || [];
-  
-  if (userExtensions.length > 0) {
-    userExtensions.forEach(ext => {
-      ext.acknowledged = true;
-    });
-    extensions[identifier] = userExtensions;
-    localStorage.setItem(EXTENSIONS_KEY, JSON.stringify(extensions));
-  }
+export const acknowledgeExtension = async (identifier: string) => {
+  await fetch(`${API_BASE}/time-extension/acknowledge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier })
+  });
 };

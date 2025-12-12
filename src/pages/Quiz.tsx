@@ -62,8 +62,8 @@ export default function Quiz() {
     }
 
     // Check for pending time extensions
-    const checkExtension = () => {
-      const pending = getPendingExtension(sessionData.matric || sessionData.phone);
+    const checkExtension = async () => {
+      const pending = await getPendingExtension(sessionData.matric || sessionData.phone);
       if (pending) {
         Swal.fire({
           title: 'Time Extended!',

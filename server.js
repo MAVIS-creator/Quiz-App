@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,183 +13,220 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-const DATA_FILE = path.join(__dirname, 'backend-data.json');
+// Initialize SQLite database
+const dbPath = path.join(__dirname, 'quiz.db');
+const db = new Database(dbPath);
+db.pragma('journal_mode = WAL');
 
-// Initialize data file if it doesn't exist
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({
-    questionCount: 40,
-    sessions: []
-  }, null, 2));
+// Create tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    identifier TEXT PRIMARY KEY,
+    matric TEXT,
+    phone TEXT,
+    name TEXT,
+    startTime TEXT,
+    answers TEXT,
+    questionTimings TEXT,
+    violations INTEGER DEFAULT 0,
+    submitted INTEGER DEFAULT 0,
+    submittedAt TEXT,
+    lastSaved TEXT,
+    questionCount INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS time_extensions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identifier TEXT NOT NULL,
+    minutesAdded INTEGER NOT NULL,
+    reason TEXT,
+    timestamp TEXT NOT NULL,
+    acknowledged INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender TEXT NOT NULL,
+    receiver TEXT NOT NULL,
+    body TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    read INTEGER DEFAULT 0
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_identifier ON sessions(identifier);
+  CREATE INDEX IF NOT EXISTS idx_time_extensions_identifier ON time_extensions(identifier);
+  CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender, receiver);
+`);
+
+// Seed default question count
+const existingConfig = db.prepare('SELECT value FROM config WHERE key = ?').get('question_count');
+if (!existingConfig) {
+  db.prepare('INSERT INTO config (key, value) VALUES (?, ?)').run('question_count', '40');
 }
 
-// Helper to read data
-const readData = () => {
+const getQuestionCount = () => {
+  const row = db.prepare('SELECT value FROM config WHERE key = ?').get('question_count');
+  return row ? Number(row.value) : 40;
+};
+
+// Helpers
+const serialize = (value) => JSON.stringify(value ?? {});
+const deserialize = (value) => {
   try {
-    const data = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return { questionCount: 40, sessions: [] };
+    return value ? JSON.parse(value) : {};
+  } catch (err) {
+    return {};
   }
 };
 
-// Helper to write data
-const writeData = (data) => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+const attachExtensions = (identifier) => {
+  return db.prepare(`
+    SELECT minutesAdded, reason, timestamp, acknowledged
+    FROM time_extensions
+    WHERE identifier = ?
+    ORDER BY timestamp DESC
+  `).all(identifier);
 };
 
-// Get question count
+// Routes
 app.get('/api/question-count', (req, res) => {
-  const data = readData();
-  res.json({ questionCount: data.questionCount });
+  res.json({ questionCount: getQuestionCount() });
 });
 
-// Set question count (admin only)
 app.post('/api/question-count', (req, res) => {
   const { questionCount } = req.body;
-  
   if (!questionCount || questionCount < 1 || questionCount > 100) {
     return res.status(400).json({ error: 'Invalid question count' });
   }
-  
-  const data = readData();
-  data.questionCount = questionCount;
-  writeData(data);
-  
+  db.prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run('question_count', String(questionCount));
   res.json({ success: true, questionCount });
 });
 
-// Save session
 app.post('/api/sessions', (req, res) => {
-  const sessionData = req.body;
-  const data = readData();
-  
-  // Find and update existing session or add new one
-  const existingIndex = data.sessions.findIndex(s => 
-    (s.matric && s.matric === sessionData.matric) || s.phone === sessionData.phone
-  );
-  
-  if (existingIndex >= 0) {
-    data.sessions[existingIndex] = sessionData;
-  } else {
-    data.sessions.push(sessionData);
+  const session = req.body;
+  const identifier = session.matric || session.phone;
+  if (!identifier) {
+    return res.status(400).json({ error: 'identifier required (matric or phone)' });
   }
-  
-  writeData(data);
+
+  db.prepare(`
+    INSERT INTO sessions (identifier, matric, phone, name, startTime, answers, questionTimings, violations, submitted, submittedAt, lastSaved, questionCount)
+    VALUES (@identifier, @matric, @phone, @name, @startTime, @answers, @questionTimings, @violations, @submitted, @submittedAt, @lastSaved, @questionCount)
+    ON CONFLICT(identifier) DO UPDATE SET
+      matric = excluded.matric,
+      phone = excluded.phone,
+      name = excluded.name,
+      startTime = excluded.startTime,
+      answers = excluded.answers,
+      questionTimings = excluded.questionTimings,
+      violations = excluded.violations,
+      submitted = excluded.submitted,
+      submittedAt = excluded.submittedAt,
+      lastSaved = excluded.lastSaved,
+      questionCount = excluded.questionCount
+  `).run({
+    identifier,
+    matric: session.matric ?? null,
+    phone: session.phone ?? null,
+    name: session.name ?? '',
+    startTime: session.startTime ?? new Date().toISOString(),
+    answers: serialize(session.answers),
+    questionTimings: serialize(session.questionTimings),
+    violations: session.violations ?? 0,
+    submitted: session.submitted ? 1 : 0,
+    submittedAt: session.submittedAt ?? null,
+    lastSaved: session.lastSaved ?? new Date().toISOString(),
+    questionCount: session.questionCount ?? null
+  });
+
   res.json({ success: true });
 });
 
-// Get all sessions
 app.get('/api/sessions', (req, res) => {
-  const data = readData();
-  res.json(data.sessions);
+  const rows = db.prepare('SELECT * FROM sessions').all();
+  const sessions = rows.map((row) => ({
+    matric: row.matric,
+    phone: row.phone,
+    name: row.name,
+    startTime: row.startTime,
+    answers: deserialize(row.answers),
+    questionTimings: deserialize(row.questionTimings),
+    violations: row.violations ?? 0,
+    submitted: !!row.submitted,
+    submittedAt: row.submittedAt,
+    lastSaved: row.lastSaved,
+    questionCount: row.questionCount ?? undefined,
+    timeExtensions: attachExtensions(row.matric || row.phone)
+  }));
+  res.json(sessions);
 });
 
-// Get time extension for a participant
 app.get('/api/time-extension/:identifier', (req, res) => {
   const { identifier } = req.params;
-  const data = readData();
-  
-  const session = data.sessions.find(s => 
-    s.matric === identifier || s.phone === identifier
-  );
-  
-  const extension = session?.timeExtensions?.find(te => !te.acknowledged);
-  res.json(extension || null);
+  const ext = db.prepare(`
+    SELECT minutesAdded, reason, timestamp, acknowledged
+    FROM time_extensions
+    WHERE identifier = ? AND acknowledged = 0
+    ORDER BY timestamp DESC
+    LIMIT 1
+  `).get(identifier);
+  res.json(ext || null);
 });
 
-// Acknowledge time extension
 app.post('/api/time-extension/acknowledge', (req, res) => {
   const { identifier } = req.body;
-  const data = readData();
-  
-  const session = data.sessions.find(s => 
-    s.matric === identifier || s.phone === identifier
-  );
-  
-  if (session?.timeExtensions) {
-    session.timeExtensions = session.timeExtensions.map(te => ({
-      ...te,
-      acknowledged: true
-    }));
-    writeData(data);
-  }
-  
+  if (!identifier) return res.status(400).json({ error: 'identifier required' });
+  db.prepare('UPDATE time_extensions SET acknowledged = 1 WHERE identifier = ?').run(identifier);
   res.json({ success: true });
 });
 
-// Add time extension
 app.post('/api/time-extension', (req, res) => {
   const { identifier, minutesAdded, reason } = req.body;
-  const data = readData();
-  
-  const session = data.sessions.find(s => 
-    s.matric === identifier || s.phone === identifier
-  );
-  
-  if (session) {
-    if (!session.timeExtensions) {
-      session.timeExtensions = [];
-    }
-    
-    session.timeExtensions.push({
-      minutesAdded,
-      reason,
-      timestamp: new Date().toISOString(),
-      acknowledged: false
-    });
-    
-    writeData(data);
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Session not found' });
+  if (!identifier || !minutesAdded) {
+    return res.status(400).json({ error: 'identifier and minutesAdded required' });
   }
+  db.prepare(`
+    INSERT INTO time_extensions (identifier, minutesAdded, reason, timestamp, acknowledged)
+    VALUES (?, ?, ?, ?, 0)
+  `).run(identifier, minutesAdded, reason ?? '', new Date().toISOString());
+  res.json({ success: true });
 });
 
-// Messages endpoints
 app.post('/api/messages', (req, res) => {
-  const message = req.body;
-  const data = readData();
-  
-  if (!data.messages) {
-    data.messages = [];
+  const { sender, receiver, body } = req.body;
+  if (!sender || !receiver || !body) {
+    return res.status(400).json({ error: 'sender, receiver and body are required' });
   }
-  
-  data.messages.push({
-    ...message,
-    timestamp: new Date().toISOString(),
-    read: false
-  });
-  
-  writeData(data);
+  db.prepare(`
+    INSERT INTO messages (sender, receiver, body, timestamp, read)
+    VALUES (?, ?, ?, ?, 0)
+  `).run(sender, receiver, body, new Date().toISOString());
   res.json({ success: true });
 });
 
 app.get('/api/messages/:sender/:receiver', (req, res) => {
   const { sender, receiver } = req.params;
-  const data = readData();
-  
-  const messages = (data.messages || []).filter(m => 
-    (m.sender === sender && m.receiver === receiver) ||
-    (m.sender === receiver && m.receiver === sender)
-  );
-  
-  res.json(messages);
+  const msgs = db.prepare(`
+    SELECT sender, receiver, body, timestamp, read
+    FROM messages
+    WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+    ORDER BY timestamp ASC
+  `).all(sender, receiver, receiver, sender);
+  res.json(msgs);
 });
 
 app.post('/api/messages/mark-read', (req, res) => {
   const { sender, receiver } = req.body;
-  const data = readData();
-  
-  if (data.messages) {
-    data.messages.forEach(m => {
-      if (m.sender === sender && m.receiver === receiver) {
-        m.read = true;
-      }
-    });
-    writeData(data);
+  if (!sender || !receiver) {
+    return res.status(400).json({ error: 'sender and receiver required' });
   }
-  
+  db.prepare('UPDATE messages SET read = 1 WHERE sender = ? AND receiver = ?').run(sender, receiver);
   res.json({ success: true });
 });
 

@@ -24,8 +24,10 @@ export default function Admin() {
 
   useEffect(() => {
     if (selectedParticipant) {
-      const conv = getConversation('admin', selectedParticipant.matric || selectedParticipant.phone);
-      setMessages(conv);
+      (async () => {
+        const conv = await getConversation('admin', selectedParticipant.matric || selectedParticipant.phone);
+        setMessages(conv);
+      })();
     }
   }, [selectedParticipant]);
 
@@ -41,15 +43,13 @@ export default function Admin() {
 
   const loadData = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/sessions');
-      const allSessions = await response.json();
+      const allSessions = await getAllSessions();
       setSessions(allSessions);
       setStats(allSessions.map(calculateStats));
     } catch (error) {
       console.error('Failed to load sessions:', error);
-      const allSessions = getAllSessions();
-      setSessions(allSessions);
-      setStats(allSessions.map(calculateStats));
+      setSessions([]);
+      setStats([]);
     }
   };
 
@@ -129,8 +129,7 @@ export default function Admin() {
     }).then(result => {
       if (result.isConfirmed && result.value) {
         const identifier = participant.matric || participant.phone;
-        addTimeExtension(identifier, result.value.minutes, result.value.reason);
-        loadData();
+        addTimeExtension(identifier, result.value.minutes, result.value.reason).then(loadData);
       }
     });
   };
@@ -139,10 +138,12 @@ export default function Admin() {
     if (!messageText.trim() || !selectedParticipant) return;
     
     const identifier = selectedParticipant.matric || selectedParticipant.phone;
-    sendMessage('admin', identifier, messageText);
-    setMessageText('');
-    const conv = getConversation('admin', identifier);
-    setMessages(conv);
+    (async () => {
+      await sendMessage('admin', identifier, messageText);
+      setMessageText('');
+      const conv = await getConversation('admin', identifier);
+      setMessages(conv);
+    })();
   };
 
   const handleImportQuestions = () => {
