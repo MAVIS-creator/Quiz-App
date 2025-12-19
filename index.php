@@ -1,4 +1,4 @@
 <?php
-// Redirect to login page
+// Main entry point - redirect to login
 header('Location: login.php');
 exit;

@@ -73,6 +73,7 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-20px); }
@@ -145,6 +146,21 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
             border-radius: 10px;
         }
+
+        /* Animated gradient text for footer */
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #eab308, #3b82f6);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -156,12 +172,10 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
                     <h1 class="text-2xl sm:text-3xl font-bold">Quiz Results</h1>
                     <p class="text-white/90 text-sm sm:text-base mt-1"><?php echo htmlspecialchars($studentName); ?></p>
                 </div>
-                <a href="dashboard.php" class="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-300 text-sm sm:text-base font-semibold">
+                <a href="login.php" class="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-300 text-sm sm:text-base font-semibold">
                     <span class="flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                        Back to Dashboard
+                        <i class='bx bx-home text-xl mr-2'></i>
+                        Back to Login
                     </span>
                 </a>
             </div>
@@ -218,6 +232,18 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
                              style="width: <?php echo $score; ?>%;"></div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Share Actions -->
+            <div class="flex flex-wrap justify-center gap-4 mb-8 animate-fadeIn" style="animation-delay: 0.15s;">
+                <button onclick="shareToWhatsApp()" class="flex items-center px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+                    <i class='bx bxl-whatsapp text-2xl mr-2'></i>
+                    Share to WhatsApp
+                </button>
+                <button onclick="window.print()" class="flex items-center px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+                    <i class='bx bx-printer text-xl mr-2'></i>
+                    Print Results
+                </button>
             </div>
 
             <!-- Chart Section -->
@@ -385,7 +411,34 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
                 toggleIcon.style.transform = 'rotate(0deg)';
             }
         }
+
+        function shareToWhatsApp() {
+            const score = <?php echo $score; ?>;
+            const correct = <?php echo $correctAnswers; ?>;
+            const total = <?php echo $totalQuestions; ?>;
+            const name = '<?php echo addslashes($studentName); ?>';
+            
+            const message = `🎓 Quiz Results 🎓%0A%0A` +
+                          `Name: ${name}%0A` +
+                          `Score: ${score}%25%0A` +
+                          `Correct Answers: ${correct}/${total}%0A%0A` +
+                          `Performance: ${score >= 70 ? 'Excellent! ⭐' : (score >= 50 ? 'Good 👍' : 'Keep Practicing 💪')}%0A%0A` +
+                          `Web Development Students 100 Level`;
+            
+            const whatsappUrl = `https://wa.me/?text=${message}`;
+            window.open(whatsappUrl, '_blank');
+        }
         <?php endif; ?>
     </script>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-sm">
+                <span class="text-gray-600">&copy; Web Dev </span>
+                <span class="text-lg font-bold gradient-text">Group 1</span>
+            </p>
+        </div>
+    </footer>
 </body>
 </html>

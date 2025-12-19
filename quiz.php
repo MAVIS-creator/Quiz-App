@@ -1,12 +1,7 @@
 <?php
-require __DIR__ . '/db.php';
-$pdo = db();
-$cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch();
-$examMin = $cfg['exam_minutes'] ?? 60;
-$count = $cfg['question_count'] ?? 40;
-$qs = $pdo->query('SELECT * FROM questions ORDER BY RANDOM() LIMIT ' . intval($count))->fetchAll();
-
-?><!doctype html>
+// Redirect to new quiz page
+header('Location: quiz_new.php');
+exit;
 <html>
 <head>
 <meta charset="utf-8">
