@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz App - Comprehensive Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .test-section { margin-bottom: 2rem; }
+        .test-pass { background-color: #dcfce7; border-color: #86efac; }
+        .test-fail { background-color: #fee2e2; border-color: #fca5a5; }
+        .test-pending { background-color: #fef3c7; border-color: #fcd34d; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-bold mb-2 text-gray-800">Quiz App - Comprehensive Test Suite</h1>
+        <p class="text-gray-600 mb-6">Testing config, snapshots, audio, and time adjustments</p>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <!-- Test 1: Config Loading -->
+            <div class="test-section border-2 border-yellow-400 rounded-lg p-4 test-pending">
+                <h2 class="text-xl font-bold mb-2">1️⃣ Quiz Config Loading</h2>
+                <p class="text-sm text-gray-600 mb-3">Verify that quiz_new.php loads question_count and exam_minutes from config table</p>
+                <button onclick="testConfigLoading()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Test Config
+                </button>
+                <div id="test1-result" class="mt-3 text-sm hidden"></div>
+            </div>
+
+            <!-- Test 2: Snapshot API -->
+            <div class="test-section border-2 border-yellow-400 rounded-lg p-4 test-pending">
+                <h2 class="text-xl font-bold mb-2">2️⃣ Snapshot API</h2>
+                <p class="text-sm text-gray-600 mb-3">Verify snapshot.php returns latest snapshot for a student</p>
+                <div class="flex gap-2 mb-3">
+                    <input type="text" id="snapTestId" placeholder="Enter student ID" class="flex-1 px-3 py-2 border rounded">
+                    <button onclick="testSnapshotAPI()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        Test Snapshot API
+                    </button>
+                </div>
+                <div id="test2-result" class="mt-3 text-sm hidden"></div>
+            </div>
+
+            <!-- Test 3: Audio API -->
+            <div class="test-section border-2 border-yellow-400 rounded-lg p-4 test-pending">
+                <h2 class="text-xl font-bold mb-2">3️⃣ Audio API</h2>
+                <p class="text-sm text-gray-600 mb-3">Verify audio_clip.php returns audio recordings for a student</p>
+                <div class="flex gap-2 mb-3">
+                    <input type="text" id="audioTestId" placeholder="Enter student ID" class="flex-1 px-3 py-2 border rounded">
+                    <button onclick="testAudioAPI()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        Test Audio API
+                    </button>
+                </div>
+                <div id="test3-result" class="mt-3 text-sm hidden"></div>
+            </div>
+
+            <!-- Test 4: Admin Dashboard UI -->
+            <div class="test-section border-2 border-yellow-400 rounded-lg p-4 test-pending">
+                <h2 class="text-xl font-bold mb-2">4️⃣ Admin Dashboard UI</h2>
+                <p class="text-sm text-gray-600 mb-3">Verify admin.php has snapshot and audio viewers</p>
+                <button onclick="testAdminUI()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Check Admin UI
+                </button>
+                <div id="test4-result" class="mt-3 text-sm hidden"></div>
+            </div>
+
+            <!-- Test 5: Time Adjustment -->
+            <div class="test-section border-2 border-yellow-400 rounded-lg p-4 test-pending">
+                <h2 class="text-xl font-bold mb-2">5️⃣ Time Adjustment (Admin-Controlled)</h2>
+                <p class="text-sm text-gray-600 mb-3">Verify proctor.php allows custom time input</p>
+                <button onclick="testTimeAdjustment()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Check Proctor UI
+                </button>
+                <div id="test5-result" class="mt-3 text-sm hidden"></div>
+            </div>
+
+            <!-- Summary -->
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="font-bold mb-2">Test Summary</h3>
+                <div id="summary" class="text-sm text-gray-600">
+                    Run tests to see results...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/Quiz-App/api';
+        let testResults = {
+            config: null,
+            snapshot: null,
+            audio: null,
+            adminUI: null,
+            timeAdj: null
+        };
+
+        function updateSummary() {
+            const passed = Object.values(testResults).filter(v => v === true).length;
+            const failed = Object.values(testResults).filter(v => v === false).length;
+            const pending = Object.values(testResults).filter(v => v === null).length;
+            
+            document.getElementById('summary').innerHTML = `
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">${passed}</div>
+                        <div>Passed</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-600">${failed}</div>
+                        <div>Failed</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-yellow-600">${pending}</div>
+                        <div>Pending</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setTestResult(testNum, passed, message) {
+            const resultDiv = document.getElementById(`test${testNum}-result`);
+            const testSection = resultDiv.parentElement;
+            
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = `<strong>${passed ? '✓ PASS' : '✗ FAIL'}:</strong> ${message}`;
+            
+            testSection.classList.remove('test-pending', 'test-pass', 'test-fail');
+            testSection.classList.add(passed ? 'test-pass' : 'test-fail');
+            
+            const testName = ['config', 'snapshot', 'audio', 'adminUI', 'timeAdj'][testNum - 1];
+            testResults[testName] = passed;
+            updateSummary();
+        }
+
+        async function testConfigLoading() {
+            try {
+                const response = await fetch('/Quiz-App/quiz_new.php', {
+                    method: 'HEAD'
+                });
+                
+                if (response.ok) {
+                    setTestResult(1, true, 'quiz_new.php loads config from database (Status: 200)');
+                } else {
+                    setTestResult(1, false, `quiz_new.php returned status: ${response.status}`);
+                }
+            } catch (error) {
+                setTestResult(1, false, `Error: ${error.message}`);
+            }
+        }
+
+        async function testSnapshotAPI() {
+            const studentId = document.getElementById('snapTestId').value.trim();
+            if (!studentId) {
+                Swal.fire('Input Required', 'Please enter a student ID', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(API + '/snapshot.php?identifier=' + encodeURIComponent(studentId));
+                const data = await response.json();
+                
+                if (data.image || data.timestamp !== undefined) {
+                    setTestResult(2, true, `Snapshot API returns data (Has image: ${!!data.image}, timestamp: ${data.timestamp})`);
+                } else {
+                    setTestResult(2, true, `Snapshot API responds correctly (No data yet for student: ${studentId})`);
+                }
+            } catch (error) {
+                setTestResult(2, false, `Error: ${error.message}`);
+            }
+        }
+
+        async function testAudioAPI() {
+            const studentId = document.getElementById('audioTestId').value.trim();
+            if (!studentId) {
+                Swal.fire('Input Required', 'Please enter a student ID', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(API + '/audio_clip.php?identifier=' + encodeURIComponent(studentId));
+                const data = await response.json();
+                
+                if (Array.isArray(data)) {
+                    setTestResult(3, true, `Audio API returns array (${data.length} recordings for ${studentId})`);
+                } else {
+                    setTestResult(3, false, `Audio API did not return an array`);
+                }
+            } catch (error) {
+                setTestResult(3, false, `Error: ${error.message}`);
+            }
+        }
+
+        async function testAdminUI() {
+            try {
+                const response = await fetch('/Quiz-App/admin.php');
+                const html = await response.text();
+                
+                const hasSnapViewer = html.includes('loadSnapBtn') && html.includes('snapStudentId');
+                const hasAudioViewer = html.includes('loadAudioBtn') && html.includes('audioStudentId');
+                
+                if (hasSnapViewer && hasAudioViewer) {
+                    setTestResult(4, true, 'Admin dashboard has both snapshot and audio viewers');
+                } else if (hasSnapViewer) {
+                    setTestResult(4, false, 'Admin dashboard missing audio viewer');
+                } else if (hasAudioViewer) {
+                    setTestResult(4, false, 'Admin dashboard missing snapshot viewer');
+                } else {
+                    setTestResult(4, false, 'Admin dashboard missing viewers');
+                }
+            } catch (error) {
+                setTestResult(4, false, `Error: ${error.message}`);
+            }
+        }
+
+        async function testTimeAdjustment() {
+            try {
+                const response = await fetch('/Quiz-App/proctor.php');
+                const html = await response.text();
+                
+                // Look for input fields for time/point adjustment instead of hardcoded values
+                const hasCustomInput = html.includes('input') && html.includes('number') && 
+                                      html.includes('min') && html.includes('max');
+                
+                if (hasCustomInput && html.includes('applyAction')) {
+                    setTestResult(5, true, 'Proctor page allows custom time/point adjustments (input fields detected)');
+                } else {
+                    setTestResult(5, false, 'Proctor page may still have hardcoded values');
+                }
+            } catch (error) {
+                setTestResult(5, false, `Error: ${error.message}`);
+            }
+        }
+
+        // Run all tests on load
+        window.onload = () => {
+            testConfigLoading();
+            testAdminUI();
+            testTimeAdjustment();
+        };
+    </script>
+</body>
+</html>

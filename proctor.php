@@ -222,6 +222,36 @@ if ($studentFilter) {
                 <p>Enter a student ID and click "Load Snapshot" to view</p>
             </div>
         </div>
+
+        <!-- Audio Recordings Viewer -->
+        <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-headphone text-2xl mr-2 text-blue-600'></i>
+                Audio Recordings
+            </h2>
+            <form id="audioForm" class="mb-4">
+                <div class="flex gap-4">
+                    <input 
+                        type="text" 
+                        id="audioId" 
+                        placeholder="Enter Student Matric/ID"
+                        class="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                    >
+                    <button 
+                        type="button" 
+                        id="loadAudio"
+                        class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center"
+                    >
+                        <i class='bx bx-download text-xl mr-2'></i>
+                        Load Recordings
+                    </button>
+                </div>
+            </form>
+            <div id="audioResult" class="text-center text-gray-500 py-8">
+                <i class='bx bx-music text-6xl mb-4'></i>
+                <p>Enter a student ID and click "Load Recordings" to view</p>
+            </div>
+        </div>
     </main>
 
     <!-- Footer -->
@@ -295,6 +325,59 @@ if ($studentFilter) {
             }
         };
 
+        // Load Audio Recordings
+        document.getElementById('loadAudio').onclick = async () => {
+            const studentId = document.getElementById('audioId').value.trim();
+            if (!studentId) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing ID',
+                    text: 'Please enter a student ID'
+                });
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/audio_clip.php?identifier=' + encodeURIComponent(studentId));
+                const clips = await res.json();
+                
+                if (Array.isArray(clips) && clips.length > 0) {
+                    let html = `<div class="space-y-3">`;
+                    clips.forEach((clip, idx) => {
+                        const audioData = clip.audio_data;
+                        html += `
+                            <div class="border rounded-lg p-4 bg-blue-50 hover:shadow-md transition">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold text-gray-800">Recording ${idx + 1}</span>
+                                    <span class="text-xs text-gray-500">${clip.timestamp || 'N/A'}</span>
+                                </div>
+                                <audio controls class="w-full" style="max-width: 500px;">
+                                    <source src="${audioData}" type="audio/webm">
+                                    <source src="${audioData}" type="audio/wav">
+                                    Your browser does not support audio playback.
+                                </audio>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                    document.getElementById('audioResult').innerHTML = html;
+                } else {
+                    document.getElementById('audioResult').innerHTML = `
+                        <div class="text-center py-8">
+                            <i class='bx bx-music text-6xl text-gray-400 mb-4'></i>
+                            <p class="text-gray-600">No audio recordings available for this student</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to load audio recordings: ' + error.message
+                });
+            }
+        };
+
         // Admin Action Menu
         async function showActionMenu(identifier, studentName) {
             const { value: action } = await Swal.fire({
@@ -344,16 +427,46 @@ if ($studentFilter) {
 
             if (!reason) return;
 
-            // Handle special cases
-            if (actionType === 'time_add') {
-                apiEndpoint = '/Quiz-App/api/time_control.php';
-                value = 300; // 5 minutes
-            } else if (actionType === 'time_penalty') {
-                apiEndpoint = '/Quiz-App/api/admin_actions.php';
-                actionType = 'time_penalty';
-                value = 300;
+            // Get custom value for time/point adjustments
+            if (actionType === 'time_add' || actionType === 'time_penalty') {
+                const { value: timeInput } = await Swal.fire({
+                    title: `${actionType === 'time_add' ? 'Add Time' : 'Deduct Time'}`,
+                    input: 'number',
+                    inputLabel: 'Enter duration in minutes',
+                    inputValue: '5',
+                    inputAttributes: {
+                        'min': '1',
+                        'max': '120'
+                    },
+                    showCancelButton: true,
+                    confirmButtonColor: '#7c3aed'
+                });
+                
+                if (!timeInput) return;
+                value = parseInt(timeInput) * 60; // Convert to seconds
+                
+                if (actionType === 'time_add') {
+                    apiEndpoint = '/Quiz-App/api/time_control.php';
+                } else {
+                    // For time_penalty, negate the value
+                    value = -value;
+                }
             } else if (actionType === 'point_deduction') {
-                value = 10;
+                const { value: pointInput } = await Swal.fire({
+                    title: 'Deduct Points',
+                    input: 'number',
+                    inputLabel: 'Enter number of points to deduct',
+                    inputValue: '10',
+                    inputAttributes: {
+                        'min': '1',
+                        'max': '100'
+                    },
+                    showCancelButton: true,
+                    confirmButtonColor: '#7c3aed'
+                });
+                
+                if (!pointInput) return;
+                value = parseInt(pointInput);
             }
 
             try {
@@ -387,7 +500,7 @@ if ($studentFilter) {
                     Swal.fire({
                         icon: 'success',
                         title: 'Action Applied',
-                        text: `Action "${actionType}" applied to ${studentName}`,
+                        text: `Action applied to ${studentName}`,
                         confirmButtonColor: '#7c3aed'
                     }).then(() => {
                         location.reload();

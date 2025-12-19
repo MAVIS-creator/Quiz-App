@@ -249,39 +249,31 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
                             $ans = json_decode($s['answers_json'] ?? '[]', true) ?: [];
                             $prog = count($qids) ? intval(count($ans)/count($qids)*100) : 0;
                         ?>
-                        <tr class="border-t hover:bg-gray-50">
+                        <tr class="border-t hover:bg-gray-50" data-identifier="<?php echo htmlspecialchars($s['identifier'] ?? ''); ?>">
                             <td class="py-3 px-4"><?php echo htmlspecialchars($s['name'] ?? 'N/A'); ?></td>
                             <td class="py-3 px-4 font-mono text-xs"><?php echo htmlspecialchars($s['identifier'] ?? ''); ?></td>
                             <td class="py-3 px-4">
                                 <div class="flex items-center">
                                     <div class="w-24 bg-gray-200 rounded-full h-2 mr-2">
-                                        <div class="bg-purple-600 h-2 rounded-full" style="width: <?php echo $prog; ?>%"></div>
+                                        <div class="bg-purple-600 h-2 rounded-full js-progress-bar" style="width: <?php echo $prog; ?>%"></div>
                                     </div>
-                                    <span class="text-xs"><?php echo $prog; ?>%</span>
+                                    <span class="text-xs js-progress-text"><?php echo $prog; ?>%</span>
                                 </div>
                             </td>
                             <td class="py-3 px-4">
-                                <?php if ($s['submitted'] == 1): ?>
-                                    <span class="text-sm font-semibold text-green-600">
-                                        <?php echo number_format($s['accuracy_score'] ?? 0, 1); ?>%
-                                    </span>
-                                <?php else: ?>
-                                    <span class="text-xs text-gray-400">-</span>
-                                <?php endif; ?>
+                                <span class="text-sm font-semibold js-accuracy <?php echo ($s['submitted']==1?'text-green-600':'text-gray-400'); ?>">
+                                    <?php echo $s['submitted'] == 1 ? number_format($s['accuracy_score'] ?? 0, 1) . '%' : '-'; ?>
+                                </span>
                             </td>
                             <td class="py-3 px-4">
-                                <span class="px-2 py-1 rounded text-xs font-semibold <?php echo ($s['violations']>=3?'bg-red-100 text-red-800':($s['violations']>=1?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800')); ?>">
+                                <span class="px-2 py-1 rounded text-xs font-semibold js-violations <?php echo ($s['violations']>=3?'bg-red-100 text-red-800':($s['violations']>=1?'bg-yellow-100 text-yellow-800':'bg-green-100 text-green-800')); ?>">
                                     <?php echo $s['violations']; ?>/3
                                 </span>
                             </td>
                             <td class="py-3 px-4">
-                                <?php if ($s['submitted'] == 1): ?>
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">Submitted</span>
-                                <?php else: ?>
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-800">In Progress</span>
-                                <?php endif; ?>
+                                <span class="px-2 py-1 rounded text-xs font-semibold js-status <?php echo ($s['submitted']==1?'bg-blue-100 text-blue-800':'bg-gray-100 text-gray-800'); ?>"><?php echo $s['submitted']==1?'Submitted':'In Progress'; ?></span>
                             </td>
-                            <td class="py-3 px-4 text-xs text-gray-600"><?php echo htmlspecialchars($s['last_saved'] ?? '—'); ?></td>
+                            <td class="py-3 px-4 text-xs text-gray-600 js-last-saved"><?php echo htmlspecialchars($s['last_saved'] ?? '—'); ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -385,41 +377,110 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
             }
         };
 
-        // Refresh accuracy scores
-        async function refreshAccuracy() {
-            Swal.fire({
-                title: 'Calculating Accuracy...',
-                text: 'Please wait while we calculate student performance',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
+        function computeProgress(sessionRow) {
             try {
-                const response = await fetch(API + '/accuracy.php');
-                const data = await response.json();
-
-                if (data.students) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Accuracy Updated!',
-                        text: `Updated accuracy for ${data.students.length} student(s)`,
-                        timer: 2000
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    throw new Error('No data returned');
-                }
-            } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'Failed to calculate accuracy: ' + error.message
-                });
+                const ids = JSON.parse(sessionRow.question_ids_json || '[]');
+                const answers = JSON.parse(sessionRow.answers_json || '{}');
+                const answered = Array.isArray(answers)
+                    ? answers.filter(a => a !== null && a !== '').length
+                    : Object.values(answers).filter(a => a !== null && a !== '').length;
+                if (!ids.length) return 0;
+                return Math.min(100, Math.round((answered / ids.length) * 100));
+            } catch (e) {
+                return 0;
             }
         }
+
+        function updateBadge(el, value) {
+            if (!el) return;
+            el.textContent = `${value}/3`;
+            el.classList.remove('bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800', 'bg-green-100', 'text-green-800');
+            if (value >= 3) {
+                el.classList.add('bg-red-100', 'text-red-800');
+            } else if (value >= 1) {
+                el.classList.add('bg-yellow-100', 'text-yellow-800');
+            } else {
+                el.classList.add('bg-green-100', 'text-green-800');
+            }
+        }
+
+        function updateStatus(el, submitted) {
+            if (!el) return;
+            el.textContent = submitted ? 'Submitted' : 'In Progress';
+            el.classList.remove('bg-blue-100', 'text-blue-800', 'bg-gray-100', 'text-gray-800');
+            if (submitted) {
+                el.classList.add('bg-blue-100', 'text-blue-800');
+            } else {
+                el.classList.add('bg-gray-100', 'text-gray-800');
+            }
+        }
+
+        function updateRow(sessionRow, accuracyRow) {
+            const id = sessionRow.identifier;
+            const tr = document.querySelector(`tr[data-identifier="${id}"]`);
+            if (!tr) return;
+
+            const progress = computeProgress(sessionRow);
+            const progressBar = tr.querySelector('.js-progress-bar');
+            const progressText = tr.querySelector('.js-progress-text');
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}%`;
+
+            const accuracyEl = tr.querySelector('.js-accuracy');
+            const submitted = accuracyRow ? !!accuracyRow.submitted : !!sessionRow.submitted;
+            if (accuracyEl) {
+                if (submitted) {
+                    const accVal = accuracyRow ? (accuracyRow.accuracy ?? accuracyRow.accuracy_score ?? 0) : (sessionRow.accuracy_score ?? 0);
+                    accuracyEl.textContent = `${Number(accVal).toFixed(1)}%`;
+                    accuracyEl.classList.remove('text-gray-400');
+                    accuracyEl.classList.add('text-green-600');
+                } else {
+                    accuracyEl.textContent = '-';
+                    accuracyEl.classList.add('text-gray-400');
+                    accuracyEl.classList.remove('text-green-600');
+                }
+            }
+
+            const vioEl = tr.querySelector('.js-violations');
+            const vioCount = accuracyRow && typeof accuracyRow.violations === 'number' ? accuracyRow.violations : (sessionRow.violations ?? 0);
+            updateBadge(vioEl, vioCount);
+
+            const statusEl = tr.querySelector('.js-status');
+            updateStatus(statusEl, submitted);
+
+            const lastSaved = tr.querySelector('.js-last-saved');
+            if (lastSaved) lastSaved.textContent = sessionRow.last_saved || '—';
+        }
+
+        async function pollDashboard() {
+            try {
+                const [accuracyRes, sessionsRes] = await Promise.all([
+                    fetch(API + '/accuracy.php'),
+                    fetch(API + '/sessions.php')
+                ]);
+
+                if (!accuracyRes.ok || !sessionsRes.ok) throw new Error('Network error');
+
+                const accuracyData = await accuracyRes.json();
+                const sessionsData = await sessionsRes.json();
+                const accuracyMap = new Map();
+                (accuracyData.students || []).forEach(s => accuracyMap.set(s.identifier, s));
+
+                sessionsData.forEach(sessionRow => {
+                    const accRow = accuracyMap.get(sessionRow.identifier);
+                    updateRow(sessionRow, accRow);
+                });
+            } catch (err) {
+                console.error('Dashboard polling failed', err);
+            }
+        }
+
+        function refreshAccuracy() {
+            pollDashboard();
+        }
+
+        setInterval(pollDashboard, 5000);
+        pollDashboard();
     </script>
 </body>
 </html>

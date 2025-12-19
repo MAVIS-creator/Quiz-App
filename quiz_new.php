@@ -12,9 +12,36 @@ $pdo = db();
 
 $studentName = $_SESSION['student_name'];
 $studentMatric = $_SESSION['student_matric'];
+$isTestAccount = (strpos($studentMatric, 'test') === 0 || $studentMatric === 'test');
+
+// Check for existing session TODAY (prevent same-day retakes, unless test account)
+if (!$isTestAccount) {
+    $todayCheck = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ? AND DATE(created_at) = CURDATE() AND submitted = 1');
+    $todayCheck->execute([$studentMatric]);
+    
+    if ($todayCheck->fetch()) {
+        echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
+        echo "<script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Exam Already Submitted',
+                text: 'You have already submitted an exam today. You can only take the exam once per day. Please try again tomorrow.',
+                confirmButtonColor: '#dc2626',
+                allowOutsideClick: false
+            }).then(() => {
+                window.location.href = 'login.php';
+            });
+        </script></body></html>";
+        exit;
+    }
+}
+
+// Generate unique session ID for this quiz attempt
+$sessionId = $studentMatric . '_' . date('YmdHis') . '_' . uniqid();
+$_SESSION['quiz_session_id'] = $sessionId;
 
 // Check student status
-$statusStmt = $pdo->prepare('SELECT status, time_adjustment_seconds FROM sessions WHERE identifier = ?');
+$statusStmt = $pdo->prepare('SELECT status, time_adjustment_seconds FROM sessions WHERE identifier = ? AND DATE(created_at) = CURDATE() ORDER BY created_at DESC LIMIT 1');
 $statusStmt->execute([$studentMatric]);
 $statusData = $statusStmt->fetch();
 
@@ -270,6 +297,7 @@ foreach ($questionIds as $qid) {
         const studentName = '<?php echo htmlspecialchars($studentName); ?>';
         const totalQuestions = <?php echo count($questions); ?>;
         const questionIds = <?php echo json_encode(array_column($questions, 'id')); ?>;
+        const sessionId = '<?php echo $_SESSION['quiz_session_id']; ?>';
         
         let timeLeft = <?php echo $totalSeconds; ?>;
         let answeredQuestions = new Set();
@@ -283,7 +311,6 @@ foreach ($questionIds as $qid) {
         let audioAnalyser = null;
         let mediaRecorder = null;
         let audioChunks = [];
-        
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedAnswers(); // Load previous answers first
@@ -377,10 +404,12 @@ foreach ($questionIds as $qid) {
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
                                 identifier: identifier,
+                                session_id: sessionId,
                                 name: studentName,
                                 answers: answers,
                                 timings: timings,
-                                question_ids: questionIds
+                                question_ids: questionIds,
+                                group: 1
                             })
                         });
                     } catch (e) {

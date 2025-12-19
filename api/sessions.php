@@ -15,6 +15,8 @@ try {
         if (!is_array($data)) json_out(['error' => 'Invalid payload'], 400);
         $identifier = $data['identifier'] ?? null;
         if (!$identifier) json_out(['error' => 'identifier required'], 400);
+        
+        $sessionId = $data['session_id'] ?? null;
         $name = $data['name'] ?? null;
         $submitted = !empty($data['submitted']) ? 1 : 0;
         $answers = json_encode($data['answers'] ?? []);
@@ -23,19 +25,24 @@ try {
         $violations = intval($data['violations'] ?? 0);
         $exam = intval($data['examMinutes'] ?? 60);
         $lastSaved = date('Y-m-d H:i:s');
+        $group = intval($data['group'] ?? 1);
 
-        // Check if session exists
-        $check = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ?');
-        $check->execute([$identifier]);
+        // Check if session exists (by session_id if provided, otherwise by identifier)
+        $check = null;
+        if ($sessionId) {
+            $checkStmt = $pdo->prepare('SELECT id FROM sessions WHERE session_id = ?');
+            $checkStmt->execute([$sessionId]);
+            $check = $checkStmt->fetch();
+        }
         
-        if ($check->fetch()) {
+        if ($check) {
             // Update existing session
-            $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE identifier=?')
-                ->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $identifier]);
+            $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE session_id=?')
+                ->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $sessionId]);
         } else {
             // Insert new session
-            $pdo->prepare('INSERT INTO sessions(identifier, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes) VALUES(?,?,?,?,?,?,?,?,?)')
-                ->execute([$identifier, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam]);
+            $pdo->prepare('INSERT INTO sessions(identifier, session_id, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes, `group`, session_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURDATE())')
+                ->execute([$identifier, $sessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $group]);
         }
 
         json_out(['ok' => true]);
