@@ -1,0 +1,14 @@
+RewriteEngine On
+RewriteBase /Quiz-App/
+
+# Prevent direct access to includes
+<Files "db.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Handle API requests
+RewriteRule ^api/(.*)$ api/$1.php [L]
+
+# Default document
+DirectoryIndex login.php index.php

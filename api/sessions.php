@@ -21,11 +21,21 @@ if ($method === 'POST') {
   $qids = json_encode($data['questionIds'] ?? []);
   $violations = intval($data['violations'] ?? 0);
   $exam = intval($data['examMinutes'] ?? 60);
-  $lastSaved = date('c');
+  $lastSaved = date('Y-m-d H:i:s');
 
-  $pdo->prepare('INSERT INTO sessions(identifier,name,submitted,last_saved,answers_json,timings_json,question_ids_json,violations,exam_minutes)
-    VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(identifier) DO UPDATE SET name=excluded.name, submitted=excluded.submitted, last_saved=excluded.last_saved, answers_json=excluded.answers_json, timings_json=excluded.timings_json, question_ids_json=excluded.question_ids_json, violations=excluded.violations, exam_minutes=excluded.exam_minutes')
-    ->execute([$identifier,$name,$submitted,$lastSaved,$answers,$timings,$qids,$violations,$exam]);
+  // Check if session exists
+  $check = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ?');
+  $check->execute([$identifier]);
+  
+  if ($check->fetch()) {
+    // Update existing session
+    $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE identifier=?')
+      ->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $identifier]);
+  } else {
+    // Insert new session
+    $pdo->prepare('INSERT INTO sessions(identifier, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes) VALUES(?,?,?,?,?,?,?,?,?)')
+      ->execute([$identifier, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam]);
+  }
 
   json_out(['ok' => true]);
 }

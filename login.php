@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if ($found) {
-        echo json_encode(['success' => true]);
+        echo json_encode(['success' => true, 'redirect' => 'quiz_new.php']);
     } else {
         echo json_encode(['success' => false, 'message' => 'You are not authorized to take this quiz. Please contact your instructor.']);
     }
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Check if already logged in
 if (isset($_SESSION['student_matric'])) {
-    header('Location: dashboard.php');
+    header('Location: quiz_new.php');
     exit;
 }
 ?>
@@ -58,6 +58,7 @@ if (isset($_SESSION['student_matric'])) {
     <title>Quiz Login - Web Development Students</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-20px); }
@@ -124,6 +125,21 @@ if (isset($_SESSION['student_matric'])) {
             font-weight: 600;
         }
 
+        /* Animated gradient text for footer */
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #eab308, #3b82f6);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .login-container {
@@ -143,9 +159,7 @@ if (isset($_SESSION['student_matric'])) {
         <!-- Logo/Header Section -->
         <div class="text-center mb-8 animate-slideIn">
             <div class="inline-block p-4 bg-white/20 rounded-full mb-4">
-                <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                </svg>
+                <i class='bx bxs-book-open text-white text-6xl'></i>
             </div>
             <h1 class="text-4xl font-bold text-white mb-2">Quiz Portal</h1>
             <p class="text-white/90 text-lg">Web Development Students 100 Level</p>
@@ -255,14 +269,14 @@ if (isset($_SESSION['student_matric'])) {
                     Swal.fire({
                         icon: 'success',
                         title: 'Welcome!',
-                        text: 'Login successful. Redirecting to your dashboard...',
+                        text: 'Login successful. Starting your quiz...',
                         timer: 2000,
                         showConfirmButton: false,
                         customClass: {
                             popup: 'animate-fadeIn'
                         }
                     }).then(() => {
-                        window.location.href = 'dashboard.php';
+                        window.location.href = data.redirect || 'quiz_new.php';
                     });
                 } else {
                     Swal.fire({
