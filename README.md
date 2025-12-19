@@ -144,7 +144,7 @@ cd C:\xampp\htdocs\
 
 # 2. Initialize database
 cd Quiz-App
-php init_database.php
+php scripts/init_database.php
 
 # 3. Start XAMPP
 # Open XAMPP Control Panel
@@ -335,7 +335,20 @@ Quiz-App/
 ├── 👨‍💼 admin.php              # Admin dashboard
 ├── 👁️ proctor.php            # Proctor monitoring
 ├── 🔧 db.php                 # Database connection
-├── ⚙️ init_database.php      # Database setup
+├── 📁 scripts/              # Maintenance & setup scripts
+│   ├── init_database.php
+│   ├── init_db.php
+│   ├── migrate.php
+│   ├── migrate_students.php
+│   ├── seed_students.php
+│   ├── update_student_questions_group.php
+│   ├── verify_schema.php
+│   └── tests/
+│       ├── test_all_apis.php
+│       ├── test_apis.html
+│       ├── test_comprehensive.html
+│       ├── test_config_api.php
+│       └── test_db.php
 ├── 📁 api/                   # API endpoints
 │   ├── config.php
 │   ├── sessions.php
@@ -349,7 +362,7 @@ Quiz-App/
 │   └── style.css
 ├── 📁 uploads/               # User uploads
 │   └── evidence/
-└── 📁 docs/                  # Documentation
+└── 📁 docs/                  # Documentation (all guides, summaries)
     ├── QUICK_START.md
     ├── FINAL_SUMMARY.md
     └── ...
@@ -433,7 +446,7 @@ Students can still take quiz if camera fails.
 
 ### Database Connection Error
 ```bash
-php init_database.php
+php scripts/init_database.php
 ```
 
 ### API 500 Errors

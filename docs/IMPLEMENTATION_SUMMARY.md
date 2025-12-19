@@ -1,5 +1,10 @@
 # Quiz App - Complete Implementation Summary
 
+## 🆕 Recent Maintenance (2025-12-20)
+- Utility scripts grouped under `scripts/` with test harnesses in `scripts/tests/` for easier maintenance.
+- Documentation files consolidated into `docs/` to keep the project root clean.
+- API smoke tests executed via `scripts/tests/test_all_apis.php` (14/14 passing locally).
+
 ## ✅ All Requested Features Completed
 
 ### 1. **App Naming & Branding**
