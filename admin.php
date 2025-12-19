@@ -132,20 +132,32 @@ $violations = $violStmt->fetchAll();
                     Import Questions (Markdown)
                 </h2>
                 <form id="questionForm" class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Upload .md File (Group <?php echo $adminGroup; ?>)</label>
-                        <input 
-                            type="file" 
-                            id="questionFile" 
-                            accept=".md,.txt"
-                            class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
-                        >
-                        <p class="text-xs text-gray-500 mt-2">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50 hover:border-blue-400 transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload .md File (Group <?php echo $adminGroup; ?>)</p>
+                                <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                            </div>
+                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                <i class='bx bx-download'></i> Download sample
+                            </a>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose Markdown File</span>
+                            <input 
+                                type="file" 
+                                id="questionFile" 
+                                accept=".md,.txt"
+                                class="hidden"
+                            >
+                        </label>
+                        <p id="questionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
                     </div>
                     <button 
                         type="button" 
                         id="importQuestions"
-                        class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center"
+                        class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center shadow-md"
                     >
                         <i class='bx bx-upload text-xl mr-2'></i>
                         Import Questions
@@ -250,20 +262,32 @@ $violations = $violStmt->fetchAll();
                 Import Students (CSV) - Group <?php echo $adminGroup; ?>
             </h2>
             <form id="studentForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Upload CSV File</label>
-                    <input 
-                        type="file" 
-                        id="studentFile" 
-                        accept=".csv,.txt"
-                        class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none"
-                    >
-                    <p class="text-xs text-gray-500 mt-2">Format: Name, Matric/ID, Phone (CSV with headers)</p>
+                <div class="border-2 border-dashed border-green-200 rounded-xl p-4 bg-green-50/50 hover:border-green-400 transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">Upload CSV File</p>
+                            <p class="text-xs text-gray-500">Format: Name, Matric/ID, Phone (CSV with headers)</p>
+                        </div>
+                        <a href="/Quiz-App/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
+                            <i class='bx bx-download'></i> Download sample
+                        </a>
+                    </div>
+                    <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-green-200 hover:border-green-400 cursor-pointer shadow-sm">
+                        <i class='bx bx-upload text-xl text-green-600 mr-2'></i>
+                        <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
+                        <input 
+                            type="file" 
+                            id="studentFile" 
+                            accept=".csv,.txt"
+                            class="hidden"
+                        >
+                    </label>
+                    <p id="studentFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
                 </div>
                 <button 
                     type="button" 
                     id="importStudents"
-                    class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center"
+                    class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center shadow-md"
                 >
                     <i class='bx bx-upload text-xl mr-2'></i>
                     Import Students
@@ -467,6 +491,23 @@ $violations = $violStmt->fetchAll();
 
         function refreshAccuracy() {
             pollDashboard();
+        }
+
+        // Show selected filenames for nicer UX
+        const qFile = document.getElementById('questionFile');
+        const qFileName = document.getElementById('questionFileName');
+        if (qFile && qFileName) {
+            qFile.addEventListener('change', () => {
+                qFileName.textContent = qFile.files.length ? qFile.files[0].name : 'No file chosen';
+            });
+        }
+
+        const sFile = document.getElementById('studentFile');
+        const sFileName = document.getElementById('studentFileName');
+        if (sFile && sFileName) {
+            sFile.addEventListener('change', () => {
+                sFileName.textContent = sFile.files.length ? sFile.files[0].name : 'No file chosen';
+            });
         }
 
         // Question Import Handler

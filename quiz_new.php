@@ -12,12 +12,26 @@ $pdo = db();
 
 $studentName = $_SESSION['student_name'];
 $studentMatric = $_SESSION['student_matric'];
-$isTestAccount = (strpos($studentMatric, 'test') === 0 || $studentMatric === 'test');
+$studentGroup = isset($_SESSION['student_group']) ? (int)$_SESSION['student_group'] : 1;
+
+// Resolve student group from database if not set
+if (!$studentGroup || $studentGroup <= 0) {
+    $gstmt = $pdo->prepare('SELECT group_id FROM students WHERE identifier = ? LIMIT 1');
+    $gstmt->execute([$studentMatric]);
+    $gRow = $gstmt->fetch();
+    if ($gRow && isset($gRow['group_id'])) {
+        $studentGroup = (int)$gRow['group_id'];
+        $_SESSION['student_group'] = $studentGroup;
+    } else {
+        $studentGroup = 1;
+    }
+}
+$isTestAccount = (strpos(strtolower($studentMatric), 'test') === 0 || strtolower($studentMatric) === 'test');
 
 // Check for existing session TODAY (prevent same-day retakes, unless test account)
 if (!$isTestAccount) {
-    $todayCheck = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ? AND DATE(created_at) = CURDATE() AND submitted = 1');
-    $todayCheck->execute([$studentMatric]);
+    $todayCheck = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE() AND submitted = 1');
+    $todayCheck->execute([$studentMatric, $studentGroup]);
     
     if ($todayCheck->fetch()) {
         echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
@@ -41,8 +55,8 @@ $sessionId = $studentMatric . '_' . date('YmdHis') . '_' . uniqid();
 $_SESSION['quiz_session_id'] = $sessionId;
 
 // Check student status
-$statusStmt = $pdo->prepare('SELECT status, time_adjustment_seconds FROM sessions WHERE identifier = ? AND DATE(created_at) = CURDATE() ORDER BY created_at DESC LIMIT 1');
-$statusStmt->execute([$studentMatric]);
+$statusStmt = $pdo->prepare('SELECT status, time_adjustment_seconds FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE() ORDER BY created_at DESC LIMIT 1');
+$statusStmt->execute([$studentMatric, $studentGroup]);
 $statusData = $statusStmt->fetch();
 
 if ($statusData && in_array($statusData['status'], ['booted', 'cancelled'])) {
@@ -70,18 +84,20 @@ $timeAdjustment = $statusData['time_adjustment_seconds'] ?? 0;
 $totalSeconds = ($examMin * 60) + $timeAdjustment;
 
 // Get or create shuffled questions for this student
-$shuffleStmt = $pdo->prepare('SELECT question_ids_order FROM student_questions WHERE identifier = ?');
-$shuffleStmt->execute([$studentMatric]);
+$shuffleStmt = $pdo->prepare('SELECT question_ids_order FROM student_questions WHERE identifier = ? AND group_id = ?');
+$shuffleStmt->execute([$studentMatric, $studentGroup]);
 $shuffledData = $shuffleStmt->fetch();
 
 if (!$shuffledData) {
     // Generate new shuffled order
-    $allQs = $pdo->query('SELECT id FROM questions ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+    $qsStmt = $pdo->prepare('SELECT id FROM questions WHERE `group` = ? ORDER BY id');
+    $qsStmt->execute([$studentGroup]);
+    $allQs = $qsStmt->fetchAll(PDO::FETCH_COLUMN);
     shuffle($allQs);
     $selectedIds = array_slice($allQs, 0, $count);
     
-    $insertShuffle = $pdo->prepare('INSERT INTO student_questions (identifier, question_ids_order) VALUES (?, ?)');
-    $insertShuffle->execute([$studentMatric, json_encode($selectedIds)]);
+    $insertShuffle = $pdo->prepare('INSERT INTO student_questions (identifier, group_id, question_ids_order) VALUES (?, ?, ?)');
+    $insertShuffle->execute([$studentMatric, $studentGroup, json_encode($selectedIds)]);
     $questionIds = $selectedIds;
 } else {
     $questionIds = json_decode($shuffledData['question_ids_order'], true);
@@ -90,8 +106,8 @@ if (!$shuffledData) {
 // Fetch questions in shuffled order
 $questions = [];
 foreach ($questionIds as $qid) {
-    $qStmt = $pdo->prepare('SELECT * FROM questions WHERE id = ?');
-    $qStmt->execute([$qid]);
+    $qStmt = $pdo->prepare('SELECT * FROM questions WHERE id = ? AND `group` = ?');
+    $qStmt->execute([$qid, $studentGroup]);
     $q = $qStmt->fetch();
     if ($q) $questions[] = $q;
 }
@@ -282,7 +298,7 @@ foreach ($questionIds as $qid) {
         <div class="max-w-7xl mx-auto px-4 text-center">
             <p class="text-sm">
                 <span class="text-gray-600">&copy; Web Dev </span>
-                <span class="text-lg font-bold gradient-text">Group 1</span>
+                <span class="text-lg font-bold gradient-text">Group <?php echo (int)$studentGroup; ?></span>
             </p>
         </div>
     </footer>
@@ -295,6 +311,7 @@ foreach ($questionIds as $qid) {
         const API = '/Quiz-App/api';
         const identifier = '<?php echo $studentMatric; ?>';
         const studentName = '<?php echo htmlspecialchars($studentName); ?>';
+        const studentGroup = <?php echo (int)$studentGroup; ?>;
         const totalQuestions = <?php echo count($questions); ?>;
         const questionIds = <?php echo json_encode(array_column($questions, 'id')); ?>;
         const sessionId = '<?php echo $_SESSION['quiz_session_id']; ?>';
@@ -355,7 +372,9 @@ foreach ($questionIds as $qid) {
             try {
                 const response = await fetch(`${API}/sessions.php`);
                 const sessions = await response.json();
-                const mySession = sessions.find(s => s.identifier === identifier);
+                const mySession = sessions
+                    .filter(s => s.identifier === identifier && Number(s.group) === studentGroup)
+                    .sort((a, b) => new Date(b.last_saved || b.created_at || 0) - new Date(a.last_saved || a.created_at || 0))[0];
                 
                 if (mySession && mySession.answers_json) {
                     const savedAnswers = JSON.parse(mySession.answers_json);
@@ -409,7 +428,7 @@ foreach ($questionIds as $qid) {
                                 answers: answers,
                                 timings: timings,
                                 question_ids: questionIds,
-                                group: 1
+                                group: studentGroup
                             })
                         });
                     } catch (e) {
@@ -691,7 +710,7 @@ foreach ($questionIds as $qid) {
                         timings: timings,
                         question_ids: questionIds,
                         submitted: true,
-                        group: 1
+                        group: studentGroup
                     })
                 });
                 

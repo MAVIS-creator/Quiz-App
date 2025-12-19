@@ -38,6 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if ($found) {
+        // Try to fetch group from students table; default to Group 1
+        $group = 1;
+        try {
+            require __DIR__ . '/db.php';
+            $pdo = db();
+            $gstmt = $pdo->prepare('SELECT group_id FROM students WHERE identifier = ? LIMIT 1');
+            $gstmt->execute([$_SESSION['student_matric']]);
+            $gRow = $gstmt->fetch();
+            if ($gRow && isset($gRow['group_id'])) {
+                $group = (int)$gRow['group_id'];
+            }
+        } catch (Exception $e) {
+            $group = 1;
+        }
+        $_SESSION['student_group'] = $group;
         echo json_encode(['success' => true, 'redirect' => 'quiz_new.php']);
     } else {
         echo json_encode(['success' => false, 'message' => 'You are not authorized to take this quiz. Please contact your instructor.']);
