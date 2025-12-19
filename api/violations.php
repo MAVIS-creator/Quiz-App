@@ -23,7 +23,6 @@ try {
             ->execute([$data['identifier'] ?? '', $data['type'] ?? 'tab-switch', intval($data['severity'] ?? 1), $data['message'] ?? null]);
         json_out(['ok' => true]);
     }
-    }
 
     json_out(['error' => 'Method not allowed'], 405);
 } catch (Exception $e) {

@@ -7,8 +7,5 @@ RewriteBase /Quiz-App/
     Deny from all
 </Files>
 
-# Handle API requests
-RewriteRule ^api/(.*)$ api/$1.php [L]
-
 # Default document
 DirectoryIndex login.php index.php

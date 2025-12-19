@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .test-pass { color: #10b981; }
+        .test-fail { color: #ef4444; }
+        .test-pending { color: #f59e0b; }
+        pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+    </style>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">🧪 Quiz App API Test Suite</h1>
+        <p class="text-gray-600 mb-8">Comprehensive testing of all endpoints and functionality</p>
+
+        <div id="results" class="space-y-4"></div>
+        
+        <div class="mt-8 p-6 bg-white rounded-lg shadow">
+            <h3 class="text-xl font-bold mb-4">Test Summary</h3>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="text-center">
+                    <div id="passCount" class="text-4xl font-bold text-green-600">0</div>
+                    <div class="text-sm text-gray-600">Passed</div>
+                </div>
+                <div class="text-center">
+                    <div id="failCount" class="text-4xl font-bold text-red-600">0</div>
+                    <div class="text-sm text-gray-600">Failed</div>
+                </div>
+                <div class="text-center">
+                    <div id="totalCount" class="text-4xl font-bold text-blue-600">0</div>
+                    <div class="text-sm text-gray-600">Total</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/Quiz-App/api';
+        const results = document.getElementById('results');
+        let passCount = 0, failCount = 0, totalCount = 0;
+
+        function updateCounts() {
+            document.getElementById('passCount').textContent = passCount;
+            document.getElementById('failCount').textContent = failCount;
+            document.getElementById('totalCount').textContent = totalCount;
+        }
+
+        function logTest(name, status, details = '') {
+            totalCount++;
+            if (status === 'pass') passCount++;
+            else failCount++;
+            
+            const div = document.createElement('div');
+            div.className = `p-4 rounded-lg ${status === 'pass' ? 'bg-green-50 border-l-4 border-green-500' : 'bg-red-50 border-l-4 border-red-500'}`;
+            div.innerHTML = `
+                <div class="flex items-start">
+                    <span class="text-2xl mr-3">${status === 'pass' ? '✅' : '❌'}</span>
+                    <div class="flex-1">
+                        <h3 class="font-bold ${status === 'pass' ? 'test-pass' : 'test-fail'}">${name}</h3>
+                        ${details ? `<pre class="mt-2 text-xs">${JSON.stringify(details, null, 2)}</pre>` : ''}
+                    </div>
+                </div>
+            `;
+            results.appendChild(div);
+            updateCounts();
+        }
+
+        async function runTests() {
+            console.log('🚀 Starting API tests...');
+
+            // Test 1: Config GET
+            try {
+                const response = await fetch(`${API}/config.php`);
+                const data = await response.json();
+                if (data.exam_minutes && data.question_count) {
+                    logTest('Config GET', 'pass', data);
+                } else {
+                    logTest('Config GET', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Config GET', 'fail', e.message);
+            }
+
+            // Test 2: Config POST
+            try {
+                const response = await fetch(`${API}/config.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({examMinutes: 60, questionCount: 40})
+                });
+                const data = await response.json();
+                if (data.ok || data.exam_minutes) {
+                    logTest('Config POST', 'pass', data);
+                } else {
+                    logTest('Config POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Config POST', 'fail', e.message);
+            }
+
+            // Test 3: Sessions GET
+            try {
+                const response = await fetch(`${API}/sessions.php`);
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    logTest('Sessions GET', 'pass', `Found ${data.length} sessions`);
+                } else {
+                    logTest('Sessions GET', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Sessions GET', 'fail', e.message);
+            }
+
+            // Test 4: Sessions POST
+            try {
+                const response = await fetch(`${API}/sessions.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST_' + Date.now(),
+                        name: 'Test Student',
+                        answers: {1: 'A', 2: 'B'},
+                        timings: {1: 10, 2: 20},
+                        question_ids: [1, 2, 3]
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Sessions POST', 'pass', data);
+                } else {
+                    logTest('Sessions POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Sessions POST', 'fail', e.message);
+            }
+
+            // Test 5: Violations POST
+            try {
+                const response = await fetch(`${API}/violations.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        type: 'test_violation',
+                        severity: 2,
+                        message: 'Test violation'
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Violations POST', 'pass', data);
+                } else {
+                    logTest('Violations POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Violations POST', 'fail', e.message);
+            }
+
+            // Test 6: Violations GET
+            try {
+                const response = await fetch(`${API}/violations.php`);
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    logTest('Violations GET', 'pass', `Found ${data.length} violation groups`);
+                } else {
+                    logTest('Violations GET', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Violations GET', 'fail', e.message);
+            }
+
+            // Test 7: Messages GET
+            try {
+                const response = await fetch(`${API}/messages.php?a=TEST001`);
+                const data = await response.json();
+                logTest('Messages GET', 'pass', data);
+            } catch (e) {
+                logTest('Messages GET', 'fail', e.message);
+            }
+
+            // Test 8: Messages POST
+            try {
+                const response = await fetch(`${API}/messages.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        sender: 'admin',
+                        receiver: 'TEST001',
+                        text: 'Test message'
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Messages POST', 'pass', data);
+                } else {
+                    logTest('Messages POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Messages POST', 'fail', e.message);
+            }
+
+            // Test 9: Shuffle GET
+            try {
+                const response = await fetch(`${API}/shuffle.php?identifier=TEST001`);
+                const data = await response.json();
+                if (Array.isArray(data.question_ids)) {
+                    logTest('Shuffle GET', 'pass', `Shuffled ${data.question_ids.length} questions`);
+                } else {
+                    logTest('Shuffle GET', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Shuffle GET', 'fail', e.message);
+            }
+
+            // Test 10: Accuracy GET
+            try {
+                const response = await fetch(`${API}/accuracy.php?identifier=TEST001`);
+                const data = await response.json();
+                logTest('Accuracy GET', 'pass', data);
+            } catch (e) {
+                logTest('Accuracy GET', 'fail', e.message);
+            }
+
+            // Test 11: Time Control POST
+            try {
+                const response = await fetch(`${API}/time_control.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        adjustment_seconds: 300,
+                        reason: 'Test adjustment',
+                        admin_name: 'Test Admin'
+                    })
+                });
+                const data = await response.json();
+                if (data.ok || data.success) {
+                    logTest('Time Control POST', 'pass', data);
+                } else {
+                    logTest('Time Control POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Time Control POST', 'fail', e.message);
+            }
+
+            // Test 12: Admin Actions POST
+            try {
+                const response = await fetch(`${API}/admin_actions.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        action_type: 'warning',
+                        reason: 'Test warning',
+                        admin_name: 'Test Admin'
+                    })
+                });
+                const data = await response.json();
+                if (data.ok || data.success) {
+                    logTest('Admin Actions POST', 'pass', data);
+                } else {
+                    logTest('Admin Actions POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Admin Actions POST', 'fail', e.message);
+            }
+
+            // Test 13: Snapshot POST
+            try {
+                const response = await fetch(`${API}/snapshot.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        image: 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Snapshot POST', 'pass', data);
+                } else {
+                    logTest('Snapshot POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Snapshot POST', 'fail', e.message);
+            }
+
+            // Test 14: Audio Clip POST
+            try {
+                const response = await fetch(`${API}/audio_clip.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        audio: 'data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC',
+                        timestamp: Date.now()
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Audio Clip POST', 'pass', data);
+                } else {
+                    logTest('Audio Clip POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Audio Clip POST', 'fail', e.message);
+            }
+
+            console.log('✅ All tests completed!');
+        }
+
+        // Run tests on page load
+        runTests();
+    </script>
+</body>
+</html>

@@ -23,7 +23,6 @@ try {
         $pdo->prepare('INSERT INTO snapshots(identifier,image) VALUES (?,?)')->execute([$id,$image]);
         json_out(['ok' => true]);
     }
-    }
 
     json_out(['error' => 'Method not allowed'], 405);
 } catch (Exception $e) {
