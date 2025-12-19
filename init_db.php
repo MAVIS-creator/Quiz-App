@@ -3,16 +3,12 @@ require __DIR__ . '/db.php';
 
 $pdo = db();
 
-// Apply MySQL schema
-$schema = file_get_contents(__DIR__ . '/schema.mysql.sql');
-foreach (array_filter(explode(";\n", $schema)) as $stmt) {
-  $trim = trim($stmt);
-  if ($trim !== '') { $pdo->exec($trim); }
-}
+// Schema should already be loaded via setup_database.sql
+// This script only seeds questions from questions.md
 
 // Parse questions.md from project root
-$mdPath = realpath(__DIR__ . '/../questions.md');
-if (!$mdPath || !file_exists($mdPath)) {
+$mdPath = __DIR__ . '/questions.md';
+if (!file_exists($mdPath)) {
   echo "questions.md not found at $mdPath\n";
   exit(0);
 }
@@ -41,15 +37,21 @@ $flush = function() use (&$id, &$category, &$prompt, &$options, &$answer, $inser
 foreach ($lines as $line) {
   $t = trim($line);
   if ($t === '') continue;
-  if (preg_match('/^##\s+(.+)/', $t, $m)) {
+  
+  // Match category: "Part X: Title (range)"
+  if (preg_match('/^Part\s+\d+:\s+(.+?)\s+\(/', $t, $m)) {
     $category = $m[1];
-  } elseif (preg_match('/^\d+\.\s+(.+)/', $t, $m)) {
+    continue;
+  }
+  
+  // Match question line: "1. Question? A) opt B) opt C) opt D) opt Answer: X"
+  if (preg_match('/^(\d+)\.\s+(.+?)\s+A\)\s+(.+?)\s+B\)\s+(.+?)\s+C\)\s+(.+?)\s+D\)\s+(.+?)\s+Answer:\s+(.+)$/', $t, $m)) {
     $flush();
-    $prompt = $m[1];
-  } elseif (preg_match('/^-\s+(.+)/', $t, $m)) {
-    $options[] = $m[1];
-  } elseif (preg_match('/^Answer:\s+(.+)/', $t, $m)) {
-    $answer = $m[1];
+    $id = intval($m[1]);
+    $prompt = $m[2];
+    $options = [$m[3], $m[4], $m[5], $m[6]];
+    $answer = $m[7];
+    $flush();
   }
 }
 $flush();

@@ -3,11 +3,11 @@
 function db(): PDO {
   static $pdo = null;
   if ($pdo === null) {
-    $host = getenv('MYSQL_HOST') ?: '127.0.0.1';
-    $port = getenv('MYSQL_PORT') ?: '3306';
-    $db   = getenv('MYSQL_DATABASE') ?: 'quiz_app';
-    $user = getenv('MYSQL_USER') ?: 'root';
-    $pass = getenv('MYSQL_PASSWORD') ?: '';
+    $host = 'localhost';
+    $port = '3306';
+    $db   = 'quiz_app';
+    $user = 'root';
+    $pass = ''; // Set your MySQL root password here if needed
     $dsn  = "mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4";
     $pdo = new PDO($dsn, $user, $pass, [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
