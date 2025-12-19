@@ -476,13 +476,14 @@ foreach ($questionIds as $qid) {
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64Audio = reader.result;
-                    await fetch(`${API}/audio_clip.php`, {
+                    const duration = mediaRecorder ? Math.round(audioChunks.length * 10 / 1000) : 0; // Rough estimate
+                    await fetch(`${API}/audio_save.php`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
                             identifier: identifier,
                             audio: base64Audio,
-                            timestamp: Date.now()
+                            duration: duration
                         })
                     });
                 };
@@ -684,11 +685,13 @@ foreach ($questionIds as $qid) {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         identifier: identifier,
+                        session_id: sessionId,
                         name: studentName,
                         answers: answers,
                         timings: timings,
                         question_ids: questionIds,
-                        submitted: true
+                        submitted: true,
+                        group: 1
                     })
                 });
                 

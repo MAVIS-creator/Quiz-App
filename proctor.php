@@ -283,10 +283,10 @@ if ($studentFilter) {
                 const res = await fetch(API+'/snapshot.php?identifier='+encodeURIComponent(id));
                 const data = await res.json();
                 
-                if (data.image) {
+                if (data.filename && data.url) {
                     document.getElementById('snapResult').innerHTML = `
                         <div class="rounded-lg overflow-hidden inline-block shadow-lg">
-                            <img src="${data.image}" class="max-w-full" alt="Student Snapshot">
+                            <img src="${data.url}" class="max-w-2xl max-h-96 object-contain" alt="Student Snapshot">
                             <div class="bg-gray-100 px-4 py-2 text-sm text-gray-600 flex items-center justify-center">
                                 <i class='bx bx-time mr-2'></i>
                                 ${data.timestamp || 'N/A'}
@@ -338,22 +338,24 @@ if ($studentFilter) {
             }
 
             try {
-                const res = await fetch(API + '/audio_clip.php?identifier=' + encodeURIComponent(studentId));
-                const clips = await res.json();
+                const res = await fetch(API + '/audio_save.php?identifier=' + encodeURIComponent(studentId));
+                const data = await res.json();
+                const clips = data.clips || [];
                 
                 if (Array.isArray(clips) && clips.length > 0) {
                     let html = `<div class="space-y-3">`;
                     clips.forEach((clip, idx) => {
-                        const audioData = clip.audio_data;
+                        const audioUrl = clip.url;
+                        const duration = clip.duration ? `(${clip.duration}s)` : '';
                         html += `
                             <div class="border rounded-lg p-4 bg-blue-50 hover:shadow-md transition">
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="font-semibold text-gray-800">Recording ${idx + 1}</span>
-                                    <span class="text-xs text-gray-500">${clip.timestamp || 'N/A'}</span>
+                                    <span class="font-semibold text-gray-800">Recording ${idx + 1} ${duration}</span>
+                                    <span class="text-xs text-gray-500">${clip.created_at || 'N/A'}</span>
                                 </div>
                                 <audio controls class="w-full" style="max-width: 500px;">
-                                    <source src="${audioData}" type="audio/webm">
-                                    <source src="${audioData}" type="audio/wav">
+                                    <source src="${audioUrl}" type="audio/wav">
+                                    <source src="${audioUrl}" type="audio/webm">
                                     Your browser does not support audio playback.
                                 </audio>
                             </div>

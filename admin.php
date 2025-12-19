@@ -3,106 +3,40 @@ session_start();
 require __DIR__ . '/db.php';
 $pdo = db();
 
-// Simple admin authentication (you can enhance this)
-$adminPassword = 'admin123'; // Change this to a secure password
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_password'])) {
-    if ($_POST['admin_password'] === $adminPassword) {
-        $_SESSION['admin_logged_in'] = true;
-    } else {
-        $loginError = 'Invalid password';
-    }
-}
-
+// Check authentication
 if (isset($_GET['logout'])) {
-    unset($_SESSION['admin_logged_in']);
-    header('Location: admin.php');
+    session_destroy();
+    header('Location: admin_login.html');
     exit;
 }
 
 if (!isset($_SESSION['admin_logged_in'])) {
-    // Show login form
-    ?>
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Admin Login</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-        <style>
-            .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-            .gradient-text {
-                background: linear-gradient(90deg, #3b82f6, #eab308, #3b82f6);
-                background-size: 200% auto;
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-                animation: gradientShift 3s ease infinite;
-            }
-            @keyframes gradientShift {
-                0%, 100% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-            }
-        </style>
-    </head>
-    <body class="gradient-bg min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-md">
-            <div class="text-center mb-6">
-                <i class='bx bxs-shield text-6xl text-purple-600 mb-4'></i>
-                <h1 class="text-3xl font-bold text-gray-800">Admin Login</h1>
-            </div>
-            
-            <form method="POST" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
-                    <input 
-                        type="password" 
-                        name="admin_password" 
-                        required
-                        class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
-                        placeholder="Enter admin password"
-                    >
-                </div>
-                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold py-3 px-6 rounded-lg hover:from-purple-700 hover:to-purple-900 transition">
-                    Login
-                </button>
-            </form>
-            
-            <?php if (isset($loginError)): ?>
-                <p class="text-red-600 text-sm mt-4 text-center"><?php echo $loginError; ?></p>
-            <?php endif; ?>
-            
-            <div class="text-center mt-6">
-                <a href="login.php" class="text-purple-600 hover:text-purple-800 text-sm">Back to Student Login</a>
-            </div>
-        </div>
-        
-        <footer class="fixed bottom-4 left-0 right-0 text-center">
-            <p class="text-sm">
-                <span class="text-white">&copy; Web Dev </span>
-                <span class="text-lg font-bold gradient-text">Group 1</span>
-            </p>
-        </footer>
-    </body>
-    </html>
-    <?php
+    header('Location: admin_login.html');
     exit;
 }
 
+$adminGroup = $_SESSION['admin_group'] ?? 1;
+$adminUsername = $_SESSION['admin_username'] ?? 'Admin';
+
 // Admin is logged in, show dashboard
 $cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch();
-$sessions = $pdo->query('SELECT * FROM sessions ORDER BY last_saved DESC')->fetchAll();
-$violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations GROUP BY identifier ORDER BY identifier')->fetchAll();
+
+// Get sessions for this group only
+$sessStmt = $pdo->prepare('SELECT * FROM sessions WHERE `group` = ? ORDER BY last_saved DESC');
+$sessStmt->execute([$adminGroup]);
+$sessions = $sessStmt->fetchAll();
+
+// Get violations for this group only
+$violStmt = $pdo->prepare('SELECT v.identifier, COUNT(*) as count FROM violations v JOIN sessions s ON v.identifier = s.identifier WHERE s.`group` = ? GROUP BY v.identifier ORDER BY v.identifier');
+$violStmt->execute([$adminGroup]);
+$violations = $violStmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>Admin Dashboard - Group <?php echo $adminGroup; ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
@@ -130,8 +64,8 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
                 <div class="flex items-center">
                     <i class='bx bxs-dashboard text-4xl mr-3'></i>
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
-                        <p class="text-white/80 text-sm">Quiz Management System</p>
+                        <h1 class="text-2xl sm:text-3xl font-bold">Admin Dashboard - Group <?php echo $adminGroup; ?></h1>
+                        <p class="text-white/80 text-sm">Welcome, <?php echo htmlspecialchars($adminUsername); ?></p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -187,6 +121,34 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
                     >
                         <i class='bx bx-save text-xl mr-2'></i>
                         Save Configuration
+                    </button>
+                </form>
+            </div>
+
+            <!-- Import Questions -->
+            <div class="bg-white rounded-2xl p-6 shadow-lg">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-upload text-2xl mr-2 text-blue-600'></i>
+                    Import Questions (Markdown)
+                </h2>
+                <form id="questionForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Upload .md File (Group <?php echo $adminGroup; ?>)</label>
+                        <input 
+                            type="file" 
+                            id="questionFile" 
+                            accept=".md,.txt"
+                            class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+                        >
+                        <p class="text-xs text-gray-500 mt-2">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                    </div>
+                    <button 
+                        type="button" 
+                        id="importQuestions"
+                        class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center"
+                    >
+                        <i class='bx bx-upload text-xl mr-2'></i>
+                        Import Questions
                     </button>
                 </form>
             </div>
@@ -279,6 +241,34 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- Import Students -->
+        <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-upload text-2xl mr-2 text-green-600'></i>
+                Import Students (CSV) - Group <?php echo $adminGroup; ?>
+            </h2>
+            <form id="studentForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Upload CSV File</label>
+                    <input 
+                        type="file" 
+                        id="studentFile" 
+                        accept=".csv,.txt"
+                        class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none"
+                    >
+                    <p class="text-xs text-gray-500 mt-2">Format: Name, Matric/ID, Phone (CSV with headers)</p>
+                </div>
+                <button 
+                    type="button" 
+                    id="importStudents"
+                    class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center"
+                >
+                    <i class='bx bx-upload text-xl mr-2'></i>
+                    Import Students
+                </button>
+            </form>
         </div>
 
         <!-- Violations Summary -->
@@ -478,6 +468,82 @@ $violations = $pdo->query('SELECT identifier, COUNT(*) as count FROM violations 
         function refreshAccuracy() {
             pollDashboard();
         }
+
+        // Question Import Handler
+        document.getElementById('importQuestions').onclick = async () => {
+            const file = document.getElementById('questionFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_import.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Questions Imported',
+                        text: data.message + `\n\nImported: ${data.imported}/${data.total}`,
+                        confirmButtonColor: '#3085d6'
+                    });
+                    document.getElementById('questionFile').value = '';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Import failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
+
+        // Student Import Handler
+        document.getElementById('importStudents').onclick = async () => {
+            const file = document.getElementById('studentFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/student_import.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    let msg = `Imported: ${data.imported}/${data.total}`;
+                    if (data.duplicates > 0) msg += `\nDuplicates skipped: ${data.duplicates}`;
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Students Imported',
+                        text: data.message + '\n\n' + msg,
+                        confirmButtonColor: '#10b981'
+                    });
+                    document.getElementById('studentFile').value = '';
+                } else {
+                    let errMsg = data.error || 'Import failed';
+                    if (data.details && data.details.length > 0) {
+                        errMsg += '\n\n' + data.details.slice(0, 3).join('\n');
+                    }
+                    Swal.fire('Error', errMsg, 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
 
         setInterval(pollDashboard, 5000);
         pollDashboard();
