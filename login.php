@@ -22,12 +22,13 @@ $authorizedStudents = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $matricNo = trim($_POST['matric_no'] ?? '');
+    $input = trim($_POST['matric_no'] ?? '');
     
-    // Check if student is authorized
+    // Check if student is authorized by matric number OR phone number
     $found = false;
     foreach ($authorizedStudents as $student) {
-        if (strtoupper($student['matric']) === strtoupper($matricNo)) {
+        if (strtoupper($student['matric']) === strtoupper($input) || 
+            $student['phone'] === $input) {
             $_SESSION['student_matric'] = $student['matric'];
             $_SESSION['student_name'] = $student['name'];
             $_SESSION['student_phone'] = $student['phone'];
@@ -173,16 +174,17 @@ if (isset($_SESSION['student_matric'])) {
             <form id="loginForm" class="space-y-6">
                 <div>
                     <label for="matric_no" class="block text-sm font-semibold text-gray-700 mb-2">
-                        Matriculation Number
+                        Matriculation Number or Phone Number
                     </label>
                     <input 
                         type="text" 
                         id="matric_no" 
                         name="matric_no" 
                         required
-                        placeholder="Enter your matric number"
+                        placeholder="Enter matric number or phone number"
                         class="input-focus w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all duration-300 text-gray-800 font-medium"
                     >
+                    <p class="text-xs text-gray-500 mt-1">You can use either your matric number or phone number</p>
                 </div>
 
                 <button 

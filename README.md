@@ -1,326 +1,519 @@
-# Quiz App
+<div align="center">
 
-A modern, secure online quiz application built with React, TypeScript, and Tailwind CSS. Features real-time participant monitoring, admin controls, and anti-cheating measures.
+# 🎓 Quiz App - Enhanced Edition
 
-## Features
+### *Advanced Online Quiz System with Smart Proctoring*
 
-### For Participants
-- **Secure Login**: Access via matric number or phone number
-- **Live Quiz Interface**: 
-  - 40 questions from a pool of 100
-  - Shuffled question and option order
-  - Real-time timer (60 minutes)
-  - Progress tracking
-  - Question navigator grid
-- **Anti-Cheating Measures**:
-  - Tab/window switch detection with violation warnings
-  - Auto-submit on 3 violations
-  - Session persistence for crash recovery
-- **Time Management**:
-  - Real-time countdown timer
-  - Low time warning (< 5 minutes)
-  - Admin can grant time extensions
-- **Answer Tracking**: Accuracy and time-per-question analytics
+[![PHP](https://img.shields.io/badge/PHP-7.4+-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://php.net)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-### For Admin
-- **Admin Dashboard**: Full participant monitoring at `/admin`
-- **Live Participant Monitor**:
-  - See all participants with avatar circles
-  - Real-time progress, accuracy, and violation tracking
-  - Status indicators (Active/Completed)
-- **One-on-One Messaging**: 
-  - Click participant avatar to open chat panel
-  - Send real-time messages to individual participants
-  - Full conversation history
-- **Time Management**:
-  - Add time extensions with reason
-  - SweetAlert2 form interface
-  - Participants receive smooth popup notification
-- **Analytics**:
-  - Summary cards (Total, Completed, Active, Violations)
-  - Performance metrics per participant
-  - Progress bars and accuracy percentages
-- **Question Management**:
-  - Import questions from Markdown files
-  - Auto-parser with JSON preview
-- **Admin Password**: `admin123`
+*A modern, secure quiz platform with real-time monitoring, admin controls, and anti-cheating measures.*
 
-## Installation & Setup
-
-### Prerequisites
-- Node.js (v16+)
-- npm or yarn
-
-### Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd "Quiz App"
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open in browser**
-   - Navigate to `http://localhost:5173/`
-
-5. **Build for production**
-   ```bash
-   npm run build
-   ```
-
-## How to Use
-
-### As a Participant
-
-1. **Login Page** (`/`)
-   - Enter your **matric number** (if you have one) OR
-   - Enter your **phone number** (if you don't have a matric)
-   - Click "Start Quiz"
-   - Please fill in the required fields
-
-2. **Quiz Page** (`/quiz`)
-   - Answer 40 questions within 60 minutes
-   - Use the **Question Navigator** grid (bottom) to jump between questions
-   - Watch for your **timer** in the top right
-   - Each question shows:
-     - Category
-     - Question text
-     - 4 multiple choice options
-   - **Don't switch tabs/windows** - violations trigger warnings
-   - After 3 violations, quiz auto-submits
-   - Use **Previous/Next** buttons to navigate
-   - Click **Submit Quiz** when finished or out of time
-
-3. **Time Extension**
-   - If admin grants extra time, you'll receive a **SweetAlert popup**
-   - Shows minutes added and reason
-   - Your timer automatically updates
-
-### As an Admin
-
-1. **Admin Login** (`/admin`)
-   - Click "Admin Login"
-   - Password: `admin123`
-
-2. **Dashboard Overview**
-   - See summary cards: Total participants, Completed, Active, Violations
-   - Live participant table with real-time updates
-
-3. **Monitor Participants**
-   - **Avatars**: Colored circles show participant faces
-   - **Click avatar** to open direct messaging chat
-   - View progress bar (% questions answered)
-   - See accuracy percentage
-   - Check violation count
-   - Monitor status (Active/Completed)
-
-4. **Message a Participant**
-   - Click any participant's avatar or "Message" button
-   - Chat panel opens on the right
-   - Type your message and press Enter or click Send
-   - See full conversation history
-   - Timestamps for each message
-
-5. **Add Time Extension**
-   - Click "Add Time" button next to participant name
-   - Enter number of minutes (1-60)
-   - Provide a reason
-   - Participant receives instant SweetAlert notification
-   - Their timer updates automatically
-
-6. **Import Questions**
-   - Click "Import Questions" button
-   - Upload a `.md` (Markdown) file
-   - Format example:
-     ```
-     ## HTML Basics
-     1. What is HTML?
-        - Markup language
-        - Programming language
-        - Database language
-        - Server language
-        Answer: Markup language
-     ```
-   - Preview parsed JSON
-   - Copy to use in codebase
-
-## Project Structure
-
-```
-Quiz App/
-├── src/
-│   ├── components/          # Reusable React components
-│   ├── pages/
-│   │   ├── Login.tsx        # Login/roster page
-│   │   ├── Quiz.tsx         # Participant quiz interface
-│   │   └── Admin.tsx        # Admin dashboard
-│   ├── data/
-│   │   ├── questions.ts     # 100 quiz questions
-│   │   └── participants.ts  # 15 roster entries
-│   ├── types/
-│   │   └── session.ts       # TypeScript type definitions
-│   ├── utils/
-│   │   ├── sessionStore.ts  # localStorage session management
-│   │   └── messaging.ts     # Admin-participant messaging
-│   ├── App.tsx              # Main router
-│   ├── main.tsx             # Entry point
-│   └── index.css            # Tailwind styles
-├── package.json
-├── tsconfig.json
-├── tailwind.config.js
-├── vite.config.ts
-└── README.md
-```
-
-## Technology Stack
-
-- **Frontend**: React 18.3 + TypeScript
-- **Bundler**: Vite 6.4
-- **Styling**: Tailwind CSS + custom utilities
-- **Icons**: Boxicons 2.1
-- **Alerts/Modals**: SweetAlert2 11.14
-- **Routing**: React Router DOM 7.1
-- **Storage**: Browser localStorage
-
-## Key Features Explained
-
-### Session Persistence
-- Quiz state saved every 10 seconds
-- Automatic recovery on page refresh
-- Prevents data loss
-
-### Time Tracking
-- Tracks time spent per question
-- Calculates average time per question
-- Stores question timings for analytics
-
-### Anti-Cheating
-- Detects tab/window switches
-- 3-strike system auto-submits quiz
-- Logs all violations in session data
-
-### Real-time Updates
-- Admin dashboard refreshes every 3 seconds
-- Live participant status updates
-- Messaging works in real-time via localStorage
-
-## Admin Password
-**Default Admin Password**: `admin123`
-
-## Data Storage
-All data is stored locally in browser's localStorage:
-- `quiz_sessions`: Participant quiz data
-- `quiz_messages`: Admin-participant messages
-- `time_extensions`: Time extension records
-
-## Customization
-
-### Change App Title
-Edit in [src/pages/Login.tsx](src/pages/Login.tsx#L44):
-```tsx
-<h1 className="text-3xl font-bold text-slate-50">Quiz App</h1>
-```
-
-### Change Instructions Text
-Edit the subtitle in [src/pages/Login.tsx](src/pages/Login.tsx#L47):
-```tsx
-<p className="mt-2 text-slate-300">Please fill in the required fields</p>
-```
-
-### Add/Edit Questions
-Edit [src/data/questions.ts](src/data/questions.ts):
-```typescript
-export const questions: Question[] = [
-  {
-    id: 1,
-    prompt: "Your question?",
-    options: ["Option A", "Option B", "Option C", "Option D"],
-    answer: "Option A",
-    category: "Category Name"
-  },
-  // ... more questions
-];
-```
-
-### Add/Edit Participants
-Edit [src/data/participants.ts](src/data/participants.ts):
-```typescript
-export const participants = [
-  { name: "John Doe", matric: "2024001", phone: "1234567890" },
-  // ... more participants
-];
-```
-
-### Change Admin Password
-In [src/pages/Admin.tsx](src/pages/Admin.tsx#L42):
-```typescript
-if (password !== 'your-new-password') {
-  // Wrong password logic
-}
-```
-
-### Change Quiz Duration
-In [src/pages/Quiz.tsx](src/pages/Quiz.tsx#L19):
-```typescript
-const [timeLeft, setTimeLeft] = useState(3600); // Change 3600 (60 minutes) to desired seconds
-```
-
-## Features Overview
-
-| Feature | Participant | Admin |
-|---------|-------------|-------|
-| Login | ✅ | ✅ |
-| Take Quiz | ✅ | ❌ |
-| View Results | ❌ | ✅ |
-| Monitor Participants | ❌ | ✅ |
-| See Participant Faces | ❌ | ✅ |
-| Message Participants | ❌ | ✅ |
-| Grant Time Extensions | ❌ | ✅ |
-| Import Questions | ❌ | ✅ |
-| Track Violations | ❌ | ✅ |
-
-## Troubleshooting
-
-### Can't login
-- Ensure you're in the roster (check [src/data/participants.ts](src/data/participants.ts))
-- Use correct matric number or phone number
-- Phone number is required if matric is null
-
-### Timer not working
-- Check browser console for errors
-- Ensure JavaScript is enabled
-- Try refreshing the page
-
-### Admin can't add time
-- Use correct password: `admin123`
-- Ensure participant is still active (not submitted)
-- Check if browser allows localStorage
-
-### Messages not appearing
-- Refresh the admin page
-- Check if localStorage is enabled
-- Try messaging again
-
-## Browser Support
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
-
-## License
-© 2025 MAVIS. All rights reserved.
-
-## Support
-For issues or questions, contact the development team.
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Admin Guide](#-admin-guide)
 
 ---
 
-**Made with ❤️ by MAVIS**
+</div>
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [Quick Start](#-quick-start)
+- [Student Experience](#-student-experience)
+- [Admin Guide](#-admin-guide)
+- [API Endpoints](#-api-endpoints)
+- [Documentation](#-documentation)
+- [Security](#-security)
+- [Support](#-support)
+
+---
+
+## 🌟 Overview
+
+Quiz App is a comprehensive online assessment platform designed for educational institutions. It combines modern web technologies with advanced proctoring features to ensure exam integrity while providing a smooth user experience.
+
+### Key Highlights
+
+- 🔀 **Unique Questions** - Each student gets randomized question order
+- 👁️ **Smart Proctoring** - Audio & video monitoring with intelligent triggers
+- ⚡ **Real-time Control** - Dynamic time management and instant actions
+- 📊 **Analytics** - Comprehensive performance metrics and accuracy tracking
+- 💬 **Direct Communication** - Admin-to-student messaging during exams
+- 🎨 **Modern UI** - Responsive design with smooth animations
+
+---
+
+## ✨ Features
+
+### 🎯 For Students
+
+<table>
+<tr>
+<td width="50%">
+
+#### Quiz Experience
+- 🔐 **Secure Login** - Authorized student access only
+- 🔄 **Shuffled Questions** - Unique order per student
+- ⏱️ **Live Timer** - Real-time countdown with adjustments
+- 💾 **Auto-save** - Progress saved every 5 seconds
+- 📊 **Progress Tracker** - See answered questions count
+
+</td>
+<td width="50%">
+
+#### Monitoring & Safety
+- 📹 **Smart Snapshots** - Triggered on anomaly detection
+- 🔊 **Audio Detection** - Only logs unusual sounds
+- 🚫 **Tab Protection** - Auto-submit on violations
+- 💬 **Admin Messages** - Receive real-time notifications
+- 📈 **Results Page** - Detailed performance analysis
+
+</td>
+</tr>
+</table>
+
+### 🛡️ For Administrators
+
+<table>
+<tr>
+<td width="50%">
+
+#### Monitoring & Control
+- 📊 **Live Dashboard** - All sessions at a glance
+- 👁️ **Proctor View** - Real-time violation tracking
+- 📸 **Snapshot Viewer** - Camera feed monitoring
+- 📉 **Accuracy Reports** - Performance metrics
+- 🎯 **Violation Sorting** - Organized by student
+
+</td>
+<td width="50%">
+
+#### Administrative Actions
+- ⏰ **Time Control** - Add/subtract time per student
+- 📉 **Point Deduction** - Reduce scores for violations
+- 🚪 **Boot Out** - Terminate exams instantly
+- ❌ **Cancel Exam** - Block student access
+- 💬 **Messaging** - Direct student communication
+- ⚠️ **Warnings** - Log without penalties
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🛠️ Tech Stack
+
+### Backend
+- **PHP 7.4+** - Server-side logic
+- **MySQL 8.0+** - Database management
+- **Apache** - Web server (XAMPP)
+
+### Frontend
+- **Tailwind CSS** - Modern styling
+- **Vanilla JavaScript** - Client-side interactions
+- **SweetAlert2** - Beautiful alerts
+- **Chart.js** - Data visualization
+- **Boxicons** - Icon library
+
+### APIs
+- **RESTful** - Clean API architecture
+- **JSON** - Data exchange format
+- **Web Audio API** - Sound monitoring
+- **MediaDevices API** - Camera access
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- XAMPP (Apache + MySQL)
+- PHP 7.4 or higher
+- Modern web browser
+
+### Installation
+
+```bash
+# 1. Clone or download to XAMPP htdocs
+cd C:\xampp\htdocs\
+# Place Quiz-App folder here
+
+# 2. Initialize database
+cd Quiz-App
+php init_database.php
+
+# 3. Start XAMPP
+# Open XAMPP Control Panel
+# Start Apache
+# Start MySQL
+
+# 4. Access the application
+# Student Portal: http://localhost/Quiz-App/
+# Admin Portal: http://localhost/Quiz-App/admin.php
+```
+
+### Default Credentials
+
+**Admin Access:**
+- URL: `http://localhost/Quiz-App/admin.php`
+- Password: `admin123`
+
+**Test Student:**
+- Matric: `TEST001` (or any authorized student ID)
+
+---
+
+## 👨‍🎓 Student Experience
+
+### 1. Login
+Students enter their authorized matric number to access the quiz.
+
+### 2. Take Quiz
+- Questions appear in unique randomized order
+- Timer counts down with any admin adjustments
+- Answers auto-save every 5 seconds
+- Camera and microphone monitored (not invasive)
+
+### 3. Submit & View Results
+- Submit quiz manually or auto-submit when time expires
+- See score percentage immediately
+- Review correct/incorrect answers
+- View performance charts
+- Share results via WhatsApp
+
+### 4. Monitoring (Transparent)
+Students are monitored through:
+- **Camera**: Snapshots on anomaly detection
+- **Microphone**: Loud sound alerts
+- **Tab Switches**: Tracked and limited to 3
+- **Status**: Visible to admin in real-time
+
+---
+
+## 👨‍💼 Admin Guide
+
+### Dashboard Overview
+
+#### 1. Quiz Configuration
+```
+Set Questions: 1-100
+Set Duration: 5-300 minutes
+Save changes instantly
+```
+
+#### 2. Monitor Students
+- View all active sessions
+- See progress percentage
+- Check accuracy scores
+- Monitor violation counts
+- Track submission status
+
+#### 3. Proctor View
+Access comprehensive monitoring:
+- **Violations List** - Sorted by student name
+- **Action Buttons** - Quick admin controls
+- **Message Button** - Instant communication
+- **Camera Snapshots** - Live feed viewer
+
+### Administrative Actions
+
+#### Time Management
+```javascript
+Add Time: +5 minutes compensation
+Remove Time: -5 minutes penalty
+Reason: Technical issue / Violation
+```
+
+#### Disciplinary Actions
+- **Time Penalty** - Subtract from timer
+- **Point Deduction** - Reduce final score by 10 points
+- **Boot Out** - Terminate exam immediately
+- **Cancel Exam** - Block from re-entry
+- **Send Warning** - Log without penalty
+
+#### Communication
+Send messages that appear as notifications:
+- Warning messages
+- Instructions
+- Clarifications
+- Time updates
+
+### Analytics Dashboard
+
+**Refresh Accuracy** button calculates:
+- Percentage correct answers
+- Average time per question
+- Violation summaries
+- Performance trends
+
+---
+
+## 🔌 API Endpoints
+
+### Core APIs
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/config.php` | GET/POST | Quiz configuration |
+| `/api/sessions.php` | GET/POST | Student sessions |
+| `/api/violations.php` | GET/POST | Violation tracking |
+| `/api/messages.php` | GET/POST | Messaging system |
+| `/api/snapshot.php` | GET/POST | Camera snapshots |
+
+### Enhanced APIs
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/shuffle.php` | GET | Question randomization |
+| `/api/accuracy.php` | GET | Performance metrics |
+| `/api/time_control.php` | GET/POST | Time management |
+| `/api/admin_actions.php` | GET/POST | Disciplinary actions |
+
+All APIs return JSON and include proper error handling.
+
+---
+
+## 📚 Documentation
+
+Comprehensive guides available in `/docs`:
+
+| Document | Description |
+|----------|-------------|
+| [**Quick Start**](docs/QUICK_START.md) | Setup and installation |
+| [**Final Summary**](docs/FINAL_SUMMARY.md) | Complete feature list |
+| [**Enhancements Guide**](docs/ENHANCEMENTS_GUIDE.md) | Technical implementation |
+| [**Implementation Checklist**](docs/IMPLEMENTATION_CHECKLIST.md) | Requirements tracking |
+| [**Backend Guide**](docs/BACKEND_GUIDE.md) | API documentation |
+| [**Proctor Guide**](docs/PROCTOR_GUIDE.md) | Monitoring instructions |
+
+---
+
+## 🔒 Security
+
+### Implemented Measures
+
+✅ **Authentication**
+- Session-based login
+- Admin password protection
+- Authorized student list
+
+✅ **Database Security**
+- Prepared statements (SQL injection prevention)
+- Input validation
+- XSS protection with `htmlspecialchars()`
+
+✅ **Access Control**
+- Status verification (booted/cancelled)
+- Admin session checking
+- API authorization
+
+✅ **Audit Trail**
+- All actions logged with reasons
+- Timestamp tracking
+- Admin name recording
+
+✅ **Anti-Cheating**
+- Tab switch detection
+- Camera monitoring
+- Audio detection
+- Violation limits
+
+---
+
+## 📁 Project Structure
+
+```
+Quiz-App/
+├── 📄 index.php              # Entry point (redirects to login)
+├── 🔐 login.php              # Student authentication
+├── 📝 quiz_new.php           # Main quiz interface
+├── 📊 result.php             # Results display
+├── 👨‍💼 admin.php              # Admin dashboard
+├── 👁️ proctor.php            # Proctor monitoring
+├── 🔧 db.php                 # Database connection
+├── ⚙️ init_database.php      # Database setup
+├── 📁 api/                   # API endpoints
+│   ├── config.php
+│   ├── sessions.php
+│   ├── violations.php
+│   ├── messages.php
+│   ├── shuffle.php
+│   ├── accuracy.php
+│   ├── time_control.php
+│   └── admin_actions.php
+├── 📁 assets/                # CSS and static files
+│   └── style.css
+├── 📁 uploads/               # User uploads
+│   └── evidence/
+└── 📁 docs/                  # Documentation
+    ├── QUICK_START.md
+    ├── FINAL_SUMMARY.md
+    └── ...
+```
+
+---
+
+## 🎨 Features Showcase
+
+### Question Shuffling
+Each student receives questions in a unique order, preventing cheating through memorization.
+
+### Smart Proctoring
+- **Audio**: Only triggers on loud sounds (threshold-based)
+- **Video**: Captures snapshots when anomalies detected
+- **Behavior**: Tracks tab switches with grace period
+
+### Real-time Control
+Admin can adjust quiz parameters while students are taking the exam:
+- Add extra time for technical issues
+- Deduct time for violations
+- Send immediate messages
+- Take disciplinary actions
+
+### Analytics Dashboard
+Comprehensive performance metrics:
+- Accuracy percentage
+- Time management analysis
+- Violation summaries
+- Answer breakdowns
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>How do I add new students?</b></summary>
+
+Edit the authorized student list in `login.php`:
+```php
+$authorizedStudents = [
+    'CSC/2021/001',
+    'CSC/2021/002',
+    // Add more here
+];
+```
+</details>
+
+<details>
+<summary><b>How do I add questions?</b></summary>
+
+Questions are stored in the `questions` table. You can:
+1. Use `questions.md` as a template
+2. Import via SQL INSERT statements
+3. Use a CSV import tool
+</details>
+
+<details>
+<summary><b>Can I change the admin password?</b></summary>
+
+Edit `admin.php` line 8:
+```php
+$adminPassword = 'your-new-password';
+```
+</details>
+
+<details>
+<summary><b>What if camera doesn't work?</b></summary>
+
+Camera requires:
+- HTTPS connection (or localhost)
+- Browser permission granted
+- Working camera hardware
+
+Students can still take quiz if camera fails.
+</details>
+
+---
+
+## 🐛 Troubleshooting
+
+### Database Connection Error
+```bash
+php init_database.php
+```
+
+### API 500 Errors
+Check:
+- MySQL is running
+- Database `quiz_app` exists
+- PHP error logs in XAMPP
+
+### Permission Issues
+Ensure XAMPP has write permissions for:
+- `uploads/` folder
+- Session storage
+
+---
+
+## 🤝 Support
+
+Need help? Check these resources:
+
+- 📖 [Documentation](docs/)
+- 🐛 [Report Issues](https://github.com/MAVIS-creator/Quiz-App/issues)
+- 💬 [Discussions](https://github.com/MAVIS-creator/Quiz-App/discussions)
+
+---
+
+## 📊 System Requirements
+
+### Minimum
+- PHP 7.4+
+- MySQL 5.7+
+- Apache 2.4+
+- 512MB RAM
+- Modern browser (Chrome, Firefox, Edge)
+
+### Recommended
+- PHP 8.0+
+- MySQL 8.0+
+- 1GB+ RAM
+- SSD storage
+- Chrome/Edge (best camera support)
+
+---
+
+## 🎯 Roadmap
+
+Future enhancements planned:
+- [ ] Face recognition with face-api.js
+- [ ] Advanced ML-based audio classification
+- [ ] WebSocket real-time dashboard
+- [ ] PDF report generation
+- [ ] Email notifications
+- [ ] Mobile app version
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) file for details.
+
+---
+
+## 👏 Credits
+
+**Developed by:** Web Dev Group 1
+
+**Technologies Used:**
+- PHP & MySQL
+- Tailwind CSS
+- SweetAlert2
+- Chart.js
+- Boxicons
+
+---
+
+<div align="center">
+
+### ⭐ If you find this project useful, please star it!
+
+**© 2025 Web Dev Group 1. All rights reserved.**
+
+[📖 Documentation](docs/) • [🐛 Report Bug](https://github.com/MAVIS-creator/Quiz-App/issues) • [💡 Request Feature](https://github.com/MAVIS-creator/Quiz-App/issues)
+
+</div>

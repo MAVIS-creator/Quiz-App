@@ -281,9 +281,12 @@ foreach ($questionIds as $qid) {
         let cameraStream = null;
         let audioContext = null;
         let audioAnalyser = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            loadSavedAnswers(); // Load previous answers first
             initCamera();
             initAudioMonitoring();
             startTimer();
@@ -318,6 +321,39 @@ foreach ($questionIds as $qid) {
                     document.getElementById('timer').classList.add('timer-warning');
                 }
             }, 1000);
+        }
+        
+        // Load saved answers from server
+        async function loadSavedAnswers() {
+            try {
+                const response = await fetch(`${API}/sessions.php`);
+                const sessions = await response.json();
+                const mySession = sessions.find(s => s.identifier === identifier);
+                
+                if (mySession && mySession.answers_json) {
+                    const savedAnswers = JSON.parse(mySession.answers_json);
+                    const savedTimings = mySession.timings_json ? JSON.parse(mySession.timings_json) : {};
+                    
+                    // Restore answers
+                    Object.keys(savedAnswers).forEach(qid => {
+                        const answerValue = savedAnswers[qid];
+                        const radio = document.querySelector(`input[name="q${qid}"][value="${answerValue}"]`);
+                        if (radio) {
+                            radio.checked = true;
+                            answers[qid] = answerValue;
+                            answeredQuestions.add(parseInt(qid));
+                        }
+                    });
+                    
+                    // Restore timings
+                    Object.assign(timings, savedTimings);
+                    
+                    // Update progress display
+                    document.getElementById('answeredCount').textContent = answeredQuestions.size;
+                }
+            } catch (e) {
+                console.error('Failed to load saved answers:', e);
+            }
         }
         
         // Update progress
@@ -358,7 +394,12 @@ foreach ($questionIds as $qid) {
         async function initCamera() {
             try {
                 cameraStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
-                document.getElementById('camera').srcObject = cameraStream;
+                const video = document.getElementById('camera');
+                video.srcObject = cameraStream;
+                video.muted = true; // MUTE video element so audio doesn't play
+                
+                // Start background audio recording
+                startBackgroundRecording();
                 
                 // Smart snapshot - only when multiple faces detected
                 setInterval(checkForMultipleFaces, 3000);
@@ -366,6 +407,59 @@ foreach ($questionIds as $qid) {
                 console.warn('Camera access denied:', e);
                 document.getElementById('cameraStatus').innerHTML = 
                     '<i class="bx bx-video-off mr-1"></i><span class="text-red-600">Camera Disabled</span>';
+            }
+        }
+        
+        // Background audio recording
+        function startBackgroundRecording() {
+            try {
+                // Create audio-only stream for recording
+                const audioStream = new MediaStream(cameraStream.getAudioTracks());
+                mediaRecorder = new MediaRecorder(audioStream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    if (audioChunks.length > 0) {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        await uploadAudioClip(audioBlob);
+                        audioChunks = [];
+                    }
+                };
+                
+                // Start recording (will create 10-second clips)
+                mediaRecorder.start();
+                
+            } catch (e) {
+                console.warn('Audio recording failed:', e);
+            }
+        }
+        
+        // Upload audio clip to server
+        async function uploadAudioClip(audioBlob) {
+            try {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Audio = reader.result;
+                    await fetch(`${API}/audio_clip.php`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            identifier: identifier,
+                            audio: base64Audio,
+                            timestamp: Date.now()
+                        })
+                    });
+                };
+                reader.readAsDataURL(audioBlob);
+            } catch (e) {
+                console.error('Audio upload failed:', e);
             }
         }
         
@@ -409,6 +503,7 @@ foreach ($questionIds as $qid) {
                 source.connect(audioAnalyser);
                 
                 const dataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+                let isRecordingLoudSound = false;
                 
                 setInterval(function() {
                     audioAnalyser.getByteFrequencyData(dataArray);
@@ -417,6 +512,26 @@ foreach ($questionIds as $qid) {
                     // Loud voice detected (threshold: 100)
                     if (average > 100) {
                         logAudioDetection(Math.floor(average));
+                        
+                        // Start recording 5-10 second clip when loud sound detected
+                        if (!isRecordingLoudSound && mediaRecorder && mediaRecorder.state === 'recording') {
+                            isRecordingLoudSound = true;
+                            
+                            // Stop current recording after 5-10 seconds
+                            setTimeout(() => {
+                                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                    mediaRecorder.stop();
+                                    // Restart recording for next clip
+                                    setTimeout(() => {
+                                        if (mediaRecorder) {
+                                            audioChunks = [];
+                                            mediaRecorder.start();
+                                            isRecordingLoudSound = false;
+                                        }
+                                    }, 100);
+                                }
+                            }, 7000); // 7 second clip
+                        }
                     }
                 }, 1000);
             } catch (e) {

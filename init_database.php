@@ -132,6 +132,16 @@ try {
           detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_face_identifier (identifier),
           FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB",
+        
+        // Audio Clips (5-10 second recordings)
+        "CREATE TABLE audio_clips (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          identifier VARCHAR(255) NOT NULL,
+          audio_data MEDIUMTEXT NOT NULL,
+          timestamp BIGINT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_audio_clips_identifier (identifier)
         ) ENGINE=InnoDB"
     ];
     
