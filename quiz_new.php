@@ -182,14 +182,120 @@ foreach ($questionIds as $qid) {
             animation: slideUp 0.5s ease-out;
         }
 
+        /* Question Navigator */
+        .question-navigator {
+            position: fixed;
+            right: 20px;
+            top: 150px;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 1rem;
+            z-index: 40;
+            max-height: calc(100vh - 200px);
+            overflow-y-auto;
+            display: none;
+        }
+
+        .question-navigator.active {
+            display: block;
+        }
+
+        .navigator-title {
+            font-weight: bold;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            text-gray-700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 0.5rem;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-btn.unanswered {
+            background: #e5e7eb;
+            color: #6b7280;
+        }
+
+        .nav-btn.answered {
+            background: #10b981;
+            color: white;
+        }
+
+        .nav-btn.current {
+            background: #7c3aed;
+            color: white;
+            border: 2px solid #5b21b6;
+            box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        .nav-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .nav-btn.answered:hover {
+            background: #059669;
+        }
+
+        .nav-btn.unanswered:hover {
+            background: #d1d5db;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(124, 58, 237, 0.8);
+            }
+        }
+
         @media (max-width: 768px) {
+            .question-navigator {
+                display: none !important;
+            }
             .question-card {
                 margin-bottom: 1rem;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .nav-buttons-grid {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
     </style>
 </head>
 <body class="bg-gradient-to-br from-purple-50 via-white to-blue-50 min-h-screen">
+    <!-- Question Navigator Panel -->
+    <div id="questionNavigator" class="question-navigator active">
+        <div class="navigator-title">
+            <span>Questions</span>
+            <button onclick="toggleNavigator()" class="text-gray-500 hover:text-gray-700 text-lg">×</button>
+        </div>
+        <div class="nav-buttons-grid" id="navigatorButtons"></div>
+    </div>
+
     <!-- Header with Timer -->
     <div class="gradient-bg text-white shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4">
@@ -740,6 +846,60 @@ foreach ($questionIds as $qid) {
                 });
             }
         }
+
+        // Question Navigator Functions
+        function initializeNavigator() {
+            const container = document.getElementById('navigatorButtons');
+            for (let i = 1; i <= totalQuestions; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'nav-btn unanswered';
+                btn.textContent = i;
+                btn.onclick = () => goToQuestion(i);
+                btn.id = `navbtn-${i}`;
+                container.appendChild(btn);
+            }
+            updateNavigatorButtons();
+        }
+
+        function goToQuestion(qNum) {
+            const qId = questionIds[qNum - 1];
+            const card = document.querySelector(`[data-qid="${qId}"]`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                card.classList.add('highlight-pulse');
+                setTimeout(() => card.classList.remove('highlight-pulse'), 1000);
+            }
+        }
+
+        function updateNavigatorButtons() {
+            for (let i = 1; i <= totalQuestions; i++) {
+                const btn = document.getElementById(`navbtn-${i}`);
+                const qId = questionIds[i - 1];
+                
+                if (answeredQuestions.has(qId)) {
+                    btn.className = 'nav-btn answered';
+                } else {
+                    btn.className = 'nav-btn unanswered';
+                }
+            }
+        }
+
+        function toggleNavigator() {
+            const nav = document.getElementById('questionNavigator');
+            nav.classList.toggle('active');
+        }
+
+        // Update navigator when answer is selected
+        const originalUpdateProgress = updateProgress;
+        updateProgress = function(qId) {
+            originalUpdateProgress(qId);
+            updateNavigatorButtons();
+        };
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeNavigator();
+        });
     </script>
 </body>
 </html>

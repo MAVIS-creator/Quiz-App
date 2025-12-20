@@ -146,7 +146,6 @@ if (isset($_SESSION['student_matric'])) {
             </div>
             <h1 class="text-4xl font-bold text-white mb-2">Quiz Portal</h1>
             <p class="text-white/90 text-lg">Web Development Students 100 Level</p>
-            <p class="text-white/75 text-sm mt-1">Tutor: Akintunde Dolapo Elisha</p>
         </div>
 
         <!-- Login Form -->
@@ -184,8 +183,8 @@ if (isset($_SESSION['student_matric'])) {
         <!-- Footer -->
         <div class="text-center mt-6">
             <p class="text-sm">
-                <span class="text-white/80">&copy; Web Dev </span>
-                <span class="text-lg font-bold gradient-text">Group 1</span>
+                <span class="text-white/80">&copy; 100 level Web Development </span><br>
+                <span class="text-lg font-bold gradient-text">MAVIS</span>
             </p>
         </div>
     </div>
