@@ -231,7 +231,7 @@ $stats = $statsStmt->fetch();
 
         <!-- Import & Management Section -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <a href="#" class="ui-card p-6 text-center cursor-pointer group">
+            <a href="#questions" class="ui-card p-6 text-center cursor-pointer group">
                 <div class="inline-block p-3 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
                     <i class='bx bx-upload text-3xl text-blue-600'></i>
                 </div>
@@ -239,7 +239,7 @@ $stats = $statsStmt->fetch();
                 <p class="text-sm text-gray-600">Upload question file</p>
             </a>
 
-            <a href="#" class="ui-card p-6 text-center cursor-pointer group">
+            <a href="#students" class="ui-card p-6 text-center cursor-pointer group">
                 <div class="inline-block p-3 bg-gradient-to-br from-green-100 to-green-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
                     <i class='bx bx-user-plus text-3xl text-green-600'></i>
                 </div>
@@ -247,7 +247,7 @@ $stats = $statsStmt->fetch();
                 <p class="text-sm text-gray-600">Upload student list</p>
             </a>
 
-            <a href="#" class="ui-card p-6 text-center cursor-pointer group">
+            <a href="#config" class="ui-card p-6 text-center cursor-pointer group">
                 <div class="inline-block p-3 bg-gradient-to-br from-purple-100 to-purple-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
                     <i class='bx bx-cog text-3xl text-purple-600'></i>
                 </div>
@@ -255,7 +255,7 @@ $stats = $statsStmt->fetch();
                 <p class="text-sm text-gray-600">Manage exam settings</p>
             </a>
 
-            <a href="proctor.php" class="ui-card p-6 text-center cursor-pointer group">
+            <a href="proctor.php" class="ui-card p-6 text-center cursor-pointer group" id="proctor">
                 <div class="inline-block p-3 bg-gradient-to-br from-red-100 to-red-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
                     <i class='bx bx-shield-quarter text-3xl text-red-600'></i>
                 </div>
@@ -264,15 +264,257 @@ $stats = $statsStmt->fetch();
             </a>
         </div>
 
+        <!-- Configuration & Quick Stats -->
+        <div id="config" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="ui-card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-cog text-2xl mr-2 text-purple-600'></i>
+                    Quiz Configuration
+                </h2>
+                <form id="cfgForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Number of Questions</label>
+                        <input type="number" id="qcount" value="<?php echo $cfg['question_count'] ?? 40; ?>" min="1" max="100" class="ui-input w-full px-4 py-3 rounded-lg border-gray-200 focus:border-purple-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Exam Duration (minutes)</label>
+                        <input type="number" id="minutes" value="<?php echo $cfg['exam_minutes'] ?? 60; ?>" min="5" max="300" class="ui-input w-full px-4 py-3 rounded-lg border-gray-200 focus:border-purple-500 focus:outline-none">
+                    </div>
+                    <button type="button" id="saveCfg" class="ui-btn w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold py-3 px-6 rounded-lg hover:from-purple-700 hover:to-purple-900 transition flex items-center justify-center">
+                        <i class='bx bx-save text-xl mr-2'></i>
+                        Save Configuration
+                    </button>
+                </form>
+            </div>
+
+            <div class="ui-card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-bar-chart text-2xl mr-2 text-blue-600'></i>
+                    Quick Statistics
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div class="text-3xl font-bold text-blue-600"><?php echo count($sessions); ?></div>
+                        <div class="text-sm text-gray-600 mt-1">Total Sessions</div>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <div class="text-3xl font-bold text-green-600"><?php echo count(array_filter($sessions, fn($s) => $s['submitted'] == 1)); ?></div>
+                        <div class="text-sm text-gray-600 mt-1">Submitted</div>
+                    </div>
+                    <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <div class="text-3xl font-bold text-yellow-600"><?php echo count($violations); ?></div>
+                        <div class="text-sm text-gray-600 mt-1">With Violations</div>
+                    </div>
+                    <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <div class="text-3xl font-bold text-purple-600"><?php echo $cfg['question_count'] ?? 40; ?></div>
+                        <div class="text-sm text-gray-600 mt-1">Questions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Questions Management -->
+        <div id="questions" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="ui-card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-upload text-2xl mr-2 text-blue-600'></i>
+                    Import Questions (MD/TXT)
+                </h2>
+                <form id="questionForm" class="space-y-4">
+                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50 hover:border-blue-400 transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload .md/.txt File (Group <?php echo $adminGroup; ?>)</p>
+                                <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                            </div>
+                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                <i class='bx bx-download'></i> Download MD sample
+                            </a>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose Markdown/Text File</span>
+                            <input type="file" id="questionFile" accept=".md,.txt" class="hidden">
+                        </label>
+                        <p id="questionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button type="button" id="importQuestions" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center">
+                        <i class='bx bx-upload text-xl mr-2'></i>
+                        Import Questions (MD/TXT)
+                    </button>
+
+                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50 hover:border-blue-400 transition mt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload .csv File (Group <?php echo $adminGroup; ?>)</p>
+                                <p class="text-xs text-gray-500">Headers: Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer</p>
+                            </div>
+                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                <i class='bx bx-download'></i> Download CSV sample
+                            </a>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
+                            <input type="file" id="questionCsvFile" accept=".csv" class="hidden">
+                        </label>
+                        <p id="questionCsvFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button type="button" id="importQuestionsCsv" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center">
+                        <i class='bx bx-upload text-xl mr-2'></i>
+                        Import Questions (CSV)
+                    </button>
+                </form>
+            </div>
+
+            <div class="ui-card p-6">
+                <h2 class="ui-card-header text-xl font-bold">
+                    <i class='bx bx-trash text-2xl text-red-600'></i>
+                    <span>Delete Questions</span>
+                </h2>
+                <form id="deleteQuestionForm" class="space-y-4">
+                    <div class="border-2 border-dashed border-red-200 rounded-xl p-4 bg-red-50/50 hover:border-red-400 transition">
+                        <p class="text-sm font-semibold text-gray-800 mb-1">Upload .md/.txt or .csv File</p>
+                        <p class="text-xs text-gray-500 mb-3">Questions matching the prompt will be deleted</p>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-red-200 hover:border-red-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-trash text-xl text-red-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose File to Delete</span>
+                            <input type="file" id="deleteQuestionFile" accept=".md,.txt,.csv" class="hidden">
+                        </label>
+                        <p id="deleteQuestionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button type="button" id="deleteQuestions" class="ui-btn w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 px-6 rounded-lg hover:from-red-700 hover:to-red-900 transition flex items-center justify-center">
+                        <i class='bx bx-trash text-xl mr-2'></i>
+                        Delete Matching Questions
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Question -->
+        <div class="ui-card p-6 mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-plus-circle text-2xl mr-2 text-blue-600'></i>
+                Add Question (Group <?php echo $adminGroup; ?>)
+            </h2>
+            <form id="addQuestionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Prompt</label>
+                    <textarea id="qPrompt" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" rows="3" placeholder="Enter question text"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option A</label>
+                    <input id="qA" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option B</label>
+                    <input id="qB" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option C</label>
+                    <input id="qC" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option D</label>
+                    <input id="qD" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Correct Option</label>
+                    <select id="qAnswer" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Category (optional)</label>
+                    <input id="qCategory" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" placeholder="e.g., General" />
+                </div>
+                <div class="md:col-span-2">
+                    <button type="button" id="addQuestionBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center shadow-md">
+                        <i class='bx bx-plus-circle text-xl mr-2'></i>
+                        Add Question
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Student Management -->
+        <div id="students" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="ui-card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-user-plus text-2xl mr-2 text-green-600'></i>
+                    Add Student (Group <?php echo $adminGroup; ?>)
+                </h2>
+                <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Name</label>
+                        <input id="sName" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Matric / Identifier</label>
+                        <input id="sId" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Phone (optional)</label>
+                        <input id="sPhone" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                    </div>
+                    <div class="md:col-span-3">
+                        <button type="button" id="addStudentBtn" class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center shadow-md">
+                            <i class='bx bx-user-plus text-xl mr-2'></i>
+                            Add Student
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="ui-card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class='bx bx-upload text-2xl mr-2 text-green-600'></i>
+                    Import Students (CSV)
+                </h2>
+                <form id="studentForm" class="space-y-4">
+                    <div class="border-2 border-dashed border-green-200 rounded-xl p-4 bg-green-50/50 hover:border-green-400 transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload CSV File</p>
+                                <p class="text-xs text-gray-500">Format: Name, Matric/ID, Phone (CSV with headers)</p>
+                            </div>
+                            <a href="/Quiz-App/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
+                                <i class='bx bx-download'></i> Download sample
+                            </a>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-green-200 hover:border-green-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-upload text-xl text-green-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
+                            <input type="file" id="studentFile" accept=".csv,.txt" class="hidden">
+                        </label>
+                        <p id="studentFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button type="button" id="importStudents" class="ui-btn w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center">
+                        <i class='bx bx-upload text-xl mr-2'></i>
+                        Import Students
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <!-- Sessions Section -->
         <div class="ui-card p-6">
             <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900">
                     <i class='bx bx-list-check mr-2'></i>Student Sessions
                 </h2>
-                <span class="text-sm bg-gray-100 px-3 py-1 rounded-full font-semibold text-gray-700">
-                    <?php echo count($sessions); ?> Total
-                </span>
+                <div class="flex items-center gap-3">
+                    <button onclick="refreshAccuracy()" class="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center text-sm font-semibold">
+                        <i class='bx bx-refresh text-lg mr-1'></i>
+                        Refresh
+                    </button>
+                    <span class="text-sm bg-gray-100 px-3 py-1 rounded-full font-semibold text-gray-700">
+                        <?php echo count($sessions); ?> Total
+                    </span>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -311,53 +553,55 @@ $stats = $statsStmt->fetch();
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($sessions as $session): ?>
-                        <tr class="table-row border-b border-gray-200 hover:bg-gray-50">
+                        <?php foreach ($sessions as $session): 
+                            $totalQuestions = (int)($session['questions_total'] ?? 0);
+                            $answered = (int)($session['questions_answered'] ?? 0);
+                            $progressPct = $totalQuestions > 0 ? min(100, ($answered / $totalQuestions) * 100) : 0;
+                            $accuracyVal = isset($session['accuracy']) ? $session['accuracy'] : ($session['accuracy_score'] ?? null);
+                            $violCount = (int)($session['violations'] ?? 0);
+                        ?>
+                        <tr class="table-row border-b border-gray-200 hover:bg-gray-50" data-identifier="<?php echo htmlspecialchars($session['identifier'] ?? ''); ?>">
                             <td class="px-4 py-3">
                                 <div class="font-medium text-gray-900"><?php echo htmlspecialchars($session['name']); ?></div>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600"><?php echo htmlspecialchars($session['identifier']); ?></td>
                             <td class="px-4 py-3">
-                                <div class="w-32 bg-gray-200 rounded-full h-2">
-                                    <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full" style="width: <?php echo ($session['questions_answered'] / $session['questions_total'] * 100) ?? 0; ?>%"></div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-32 bg-gray-200 rounded-full h-2">
+                                        <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full js-progress-bar" style="width: <?php echo $progressPct; ?>%"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-600 js-progress-text"><?php echo round($progressPct); ?>%</span>
                                 </div>
-                                <span class="text-xs text-gray-600"><?php echo $session['questions_answered'] ?? 0; ?>/<?php echo $session['questions_total'] ?? 0; ?></span>
+                                <span class="text-xs text-gray-600"><?php echo $answered; ?>/<?php echo $totalQuestions; ?></span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="font-bold text-gray-900"><?php echo $session['accuracy'] ?? '-'; ?>%</span>
+                                <span class="font-bold text-gray-900 js-accuracy"><?php echo $session['submitted'] ? number_format((float)$accuracyVal, 1) . '%' : '-'; ?></span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <?php if ($session['violations'] > 0): ?>
-                                    <span class="badge badge-danger">
-                                        <i class='bx bx-error-circle'></i>
-                                        <?php echo $session['violations']; ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="badge badge-success">
-                                        <i class='bx bx-check'></i>
-                                        0
-                                    </span>
-                                <?php endif; ?>
+                                <span class="badge <?php echo $violCount > 0 ? 'badge-danger' : 'badge-success'; ?> js-violations">
+                                    <i class='bx bx-error-circle'></i>
+                                    <?php echo $violCount; ?>/3
+                                </span>
                             </td>
                             <td class="px-4 py-3">
                                 <?php if ($session['submitted']): ?>
-                                    <span class="badge badge-success">
+                                    <span class="badge badge-success js-status">
                                         <i class='bx bx-check-circle'></i>
                                         Submitted
                                     </span>
-                                <?php elseif ($session['status'] === 'booted'): ?>
-                                    <span class="badge badge-danger">
+                                <?php elseif (($session['status'] ?? '') === 'booted'): ?>
+                                    <span class="badge badge-danger js-status">
                                         <i class='bx bx-x-circle'></i>
                                         Booted
                                     </span>
                                 <?php else: ?>
-                                    <span class="badge badge-info">
+                                    <span class="badge badge-info js-status">
                                         <i class='bx bx-hourglass'></i>
                                         In Progress
                                     </span>
                                 <?php endif; ?>
                             </td>
-                            <td class="px-4 py-3 text-sm text-gray-600">
+                            <td class="px-4 py-3 text-sm text-gray-600 js-last-saved">
                                 <?php echo isset($session['last_saved']) ? date('H:i', strtotime($session['last_saved'])) : date('H:i', strtotime($session['created_at'])); ?>
                             </td>
                         </tr>
@@ -417,9 +661,391 @@ $stats = $statsStmt->fetch();
     </footer>
 
     <script>
+        const API = '/Quiz-App/api';
+
+        // Date filter
         document.getElementById('dateFilter').addEventListener('change', (e) => {
             window.location.href = `?filter=date&date=${e.target.value}`;
         });
+
+        // Config save
+        document.getElementById('saveCfg').onclick = async () => {
+            const questionCount = Number(document.getElementById('qcount').value);
+            const examMinutes = Number(document.getElementById('minutes').value);
+
+            if (questionCount < 1 || questionCount > 100) {
+                Swal.fire({ icon: 'error', title: 'Invalid Input', text: 'Questions must be between 1 and 100' });
+                return;
+            }
+
+            if (examMinutes < 5 || examMinutes > 300) {
+                Swal.fire({ icon: 'error', title: 'Invalid Input', text: 'Duration must be between 5 and 300 minutes' });
+                return;
+            }
+
+            Swal.fire({
+                title: 'Saving...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await fetch(API + '/config.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ questionCount, examMinutes })
+                });
+
+                if (res.ok) {
+                    Swal.fire({ icon: 'success', title: 'Saved!', text: 'Quiz configuration updated successfully', timer: 2000 })
+                        .then(() => location.reload());
+                } else {
+                    throw new Error('Failed to save');
+                }
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save configuration' });
+            }
+        };
+
+        function computeProgress(sessionRow) {
+            try {
+                const ids = JSON.parse(sessionRow.question_ids_json || '[]');
+                const answers = JSON.parse(sessionRow.answers_json || '{}');
+                const answered = Array.isArray(answers)
+                    ? answers.filter(a => a !== null && a !== '').length
+                    : Object.values(answers).filter(a => a !== null && a !== '').length;
+                if (!ids.length) return 0;
+                return Math.min(100, Math.round((answered / ids.length) * 100));
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function updateBadge(el, value) {
+            if (!el) return;
+            el.textContent = `${value}/3`;
+            el.classList.remove('bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800', 'bg-green-100', 'text-green-800');
+            if (value >= 3) {
+                el.classList.add('bg-red-100', 'text-red-800');
+            } else if (value >= 1) {
+                el.classList.add('bg-yellow-100', 'text-yellow-800');
+            } else {
+                el.classList.add('bg-green-100', 'text-green-800');
+            }
+        }
+
+        function updateStatus(el, submitted) {
+            if (!el) return;
+            el.textContent = submitted ? 'Submitted' : 'In Progress';
+            el.classList.remove('bg-blue-100', 'text-blue-800', 'bg-gray-100', 'text-gray-800');
+            if (submitted) {
+                el.classList.add('bg-blue-100', 'text-blue-800');
+            } else {
+                el.classList.add('bg-gray-100', 'text-gray-800');
+            }
+        }
+
+        function updateRow(sessionRow, accuracyRow) {
+            const id = sessionRow.identifier;
+            const tr = document.querySelector(`tr[data-identifier="${id}"]`);
+            if (!tr) return;
+
+            const progress = computeProgress(sessionRow);
+            const progressBar = tr.querySelector('.js-progress-bar');
+            const progressText = tr.querySelector('.js-progress-text');
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}%`;
+
+            const accuracyEl = tr.querySelector('.js-accuracy');
+            const submitted = accuracyRow ? !!accuracyRow.submitted : !!sessionRow.submitted;
+            if (accuracyEl) {
+                if (submitted) {
+                    const accVal = accuracyRow ? (accuracyRow.accuracy ?? accuracyRow.accuracy_score ?? 0) : (sessionRow.accuracy_score ?? sessionRow.accuracy ?? 0);
+                    accuracyEl.textContent = `${Number(accVal).toFixed(1)}%`;
+                    accuracyEl.classList.remove('text-gray-400');
+                    accuracyEl.classList.add('text-green-600');
+                } else {
+                    accuracyEl.textContent = '-';
+                    accuracyEl.classList.add('text-gray-400');
+                    accuracyEl.classList.remove('text-green-600');
+                }
+            }
+
+            const vioEl = tr.querySelector('.js-violations');
+            const vioCount = accuracyRow && typeof accuracyRow.violations === 'number' ? accuracyRow.violations : (sessionRow.violations ?? 0);
+            updateBadge(vioEl, vioCount);
+
+            const statusEl = tr.querySelector('.js-status');
+            updateStatus(statusEl, submitted);
+
+            const lastSaved = tr.querySelector('.js-last-saved');
+            if (lastSaved) lastSaved.textContent = sessionRow.last_saved || '—';
+        }
+
+        async function pollDashboard() {
+            try {
+                const [accuracyRes, sessionsRes] = await Promise.all([
+                    fetch(API + '/accuracy.php'),
+                    fetch(API + '/sessions.php')
+                ]);
+
+                if (!accuracyRes.ok || !sessionsRes.ok) throw new Error('Network error');
+
+                const accuracyData = await accuracyRes.json();
+                const sessionsData = await sessionsRes.json();
+                const accuracyMap = new Map();
+                (accuracyData.students || []).forEach(s => accuracyMap.set(s.identifier, s));
+
+                sessionsData.forEach(sessionRow => {
+                    const accRow = accuracyMap.get(sessionRow.identifier);
+                    updateRow(sessionRow, accRow);
+                });
+            } catch (err) {
+                console.error('Dashboard polling failed', err);
+            }
+        }
+
+        function refreshAccuracy() {
+            pollDashboard();
+        }
+
+        // File name helpers
+        const qFile = document.getElementById('questionFile');
+        const qFileName = document.getElementById('questionFileName');
+        if (qFile && qFileName) {
+            qFile.addEventListener('change', () => {
+                qFileName.textContent = qFile.files.length ? qFile.files[0].name : 'No file chosen';
+            });
+        }
+
+        const qCsvFile = document.getElementById('questionCsvFile');
+        const qCsvFileName = document.getElementById('questionCsvFileName');
+        if (qCsvFile && qCsvFileName) {
+            qCsvFile.addEventListener('change', () => {
+                qCsvFileName.textContent = qCsvFile.files.length ? qCsvFile.files[0].name : 'No file chosen';
+            });
+        }
+
+        const delFile = document.getElementById('deleteQuestionFile');
+        const delFileName = document.getElementById('deleteQuestionFileName');
+        if (delFile && delFileName) {
+            delFile.addEventListener('change', () => {
+                delFileName.textContent = delFile.files.length ? delFile.files[0].name : 'No file chosen';
+            });
+        }
+
+        const sFile = document.getElementById('studentFile');
+        const sFileName = document.getElementById('studentFileName');
+        if (sFile && sFileName) {
+            sFile.addEventListener('change', () => {
+                sFileName.textContent = sFile.files.length ? sFile.files[0].name : 'No file chosen';
+            });
+        }
+
+        // Question Import Handler
+        document.getElementById('importQuestions').onclick = async () => {
+            const file = document.getElementById('questionFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_import.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Questions Imported', text: data.message + `\n\nImported: ${data.imported}/${data.total}`, confirmButtonColor: '#3085d6' });
+                    document.getElementById('questionFile').value = '';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Import failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
+
+        // Question CSV Import Handler
+        document.getElementById('importQuestionsCsv').onclick = async () => {
+            const file = document.getElementById('questionCsvFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a CSV file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_import_csv.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Questions Imported (CSV)', text: data.message + `\n\nImported: ${data.imported}/${data.total}`, confirmButtonColor: '#3085d6' });
+                    document.getElementById('questionCsvFile').value = '';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Import failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
+
+        // Manual Add Question
+        document.getElementById('addQuestionBtn').onclick = async () => {
+            const prompt = document.getElementById('qPrompt').value.trim();
+            const A = document.getElementById('qA').value.trim();
+            const B = document.getElementById('qB').value.trim();
+            const C = document.getElementById('qC').value.trim();
+            const D = document.getElementById('qD').value.trim();
+            const ansKey = document.getElementById('qAnswer').value;
+            const category = document.getElementById('qCategory').value.trim() || 'General';
+
+            const map = { A, B, C, D };
+            const answer = map[ansKey];
+            if (!prompt || !A || !B || !C || !D || !answer) {
+                Swal.fire('Error', 'Please fill all fields', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/question_add.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, option_a: A, option_b: B, option_c: C, option_d: D, answer, category })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Question Added', text: data.message });
+                    document.getElementById('addQuestionForm').reset();
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Add failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Add failed: ' + err.message, 'error');
+            }
+        };
+
+        // Manual Add Student
+        document.getElementById('addStudentBtn').onclick = async () => {
+            const name = document.getElementById('sName').value.trim();
+            const identifier = document.getElementById('sId').value.trim();
+            const phone = document.getElementById('sPhone').value.trim();
+
+            if (!name || !identifier) {
+                Swal.fire('Error', 'Name and Matric/Identifier are required', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/student_add.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, identifier, phone })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Student Added', text: data.message });
+                    document.getElementById('addStudentForm').reset();
+                } else {
+                    Swal.fire('Error', data.error || 'Add failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Add failed: ' + err.message, 'error');
+            }
+        };
+
+        // Delete Questions Handler
+        document.getElementById('deleteQuestions').onclick = async () => {
+            const file = document.getElementById('deleteQuestionFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file with questions to delete', 'error');
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Confirm Deletion',
+                text: 'This will permanently delete all matching questions. Continue?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete them',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_delete.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deletion Complete',
+                        html: `
+                            <p>${data.message}</p>
+                            <p class="mt-2">Deleted: ${data.deleted} / ${data.total}</p>
+                            ${data.not_found > 0 ? `<p class="text-yellow-600">Not found: ${data.not_found}</p>` : ''}
+                        `,
+                        confirmButtonColor: '#3085d6'
+                    });
+                    document.getElementById('deleteQuestionFile').value = '';
+                    document.getElementById('deleteQuestionFileName').textContent = 'No file chosen';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Deletion failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Deletion failed: ' + err.message, 'error');
+            }
+        };
+
+        // Student Import Handler
+        document.getElementById('importStudents').onclick = async () => {
+            const file = document.getElementById('studentFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/student_import.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    let msg = `Imported: ${data.imported}/${data.total}`;
+                    if (data.duplicates > 0) msg += `\nDuplicates skipped: ${data.duplicates}`;
+
+                    Swal.fire({ icon: 'success', title: 'Students Imported', text: data.message + '\n\n' + msg, confirmButtonColor: '#10b981' });
+                    document.getElementById('studentFile').value = '';
+                } else {
+                    let errMsg = data.error || 'Import failed';
+                    if (data.details && data.details.length > 0) {
+                        errMsg += '\n\n' + data.details.slice(0, 3).join('\n');
+                    }
+                    Swal.fire('Error', errMsg, 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
+
+        setInterval(pollDashboard, 5000);
+        pollDashboard();
     </script>
 </body>
 </html>
