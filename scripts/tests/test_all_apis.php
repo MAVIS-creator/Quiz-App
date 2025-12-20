@@ -114,6 +114,59 @@ testAPI('Audio Clip POST', "$API/audio_clip.php", 'POST', [
     'timestamp' => time() * 1000
 ]);
 
+// Test 15: Audio Save POST
+testAPI('Audio Save POST', "$API/audio_save.php", 'POST', [
+    'identifier' => 'TEST001',
+    'audio' => 'data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC',
+    'duration' => 3.5
+]);
+
+// Test 16: Student Import POST
+$csv = "Name,Matric,Phone\nSample Student,IMPTEST001,08099998888";
+$tmpCsv = tempnam(sys_get_temp_dir(), 'students_');
+file_put_contents($tmpCsv, $csv);
+$csvFile = new CURLFile($tmpCsv, 'text/csv', 'students.csv');
+$ch = curl_init("$API/student_import.php");
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, ['file' => $csvFile]);
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+$json = json_decode($response, true);
+if ($httpCode >= 200 && $httpCode < 400 && $json && !empty($json['success'])) {
+    echo "✅ Student Import POST - PASS\n";
+    $passCount++;
+} else {
+    echo "❌ Student Import POST - FAIL (HTTP $httpCode)\n";
+    echo "   Response: " . substr($response, 0, 120) . "\n";
+    $failCount++;
+}
+@unlink($tmpCsv);
+
+// Test 17: Question Import POST
+$md = "# Group 1\n## Imported Question\nOption A\n~~Option B~~\nOption C\nOption D";
+$tmpMd = tempnam(sys_get_temp_dir(), 'questions_');
+file_put_contents($tmpMd, $md);
+$mdFile = new CURLFile($tmpMd, 'text/markdown', 'questions.md');
+$ch = curl_init("$API/question_import.php");
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, ['file' => $mdFile]);
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+$json = json_decode($response, true);
+if ($httpCode >= 200 && $httpCode < 400 && $json && !empty($json['success'])) {
+    echo "✅ Question Import POST - PASS\n";
+    $passCount++;
+} else {
+    echo "❌ Question Import POST - FAIL (HTTP $httpCode)\n";
+    echo "   Response: " . substr($response, 0, 120) . "\n";
+    $failCount++;
+}
+@unlink($tmpMd);
+
 echo "\n=== Test Summary ===\n";
 echo "✅ Passed: $passCount\n";
 echo "❌ Failed: $failCount\n";

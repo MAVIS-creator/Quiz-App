@@ -1,0 +1,23 @@
+Quiz Questions - Markdown/Text Format Guide
+
+Use this format in a .md or .txt file:
+
+# Group 1
+## What is the correct HTML tag for a line break?
+Option A
+~~Option B~~  <- Correct option (wrapped with ~~)
+Option C
+Option D
+
+# Group 2
+## Which tag creates an ordered list?
+Option A
+~~Option B~~
+Option C
+Option D
+
+Rules:
+- Start each group with '# Group X'
+- Each question begins with '## Question text'
+- Provide exactly 4 options
+- Wrap the correct option in double tildes: ~~Correct~~

@@ -1,61 +1,28 @@
 <?php
 session_start();
-
-// List of authorized students from the image
-$authorizedStudents = [
-    ['matric' => '2025000831', 'name' => 'SANNI Olayinka', 'phone' => '8084343242'],
-    ['matric' => '2025002070', 'name' => 'Shobodun Faridat Tolulope', 'phone' => '9128823922'],
-    ['matric' => '2025000776', 'name' => 'DIPEOLU AMAL TITILOPE', 'phone' => '8063966934'],
-    ['matric' => 'NIL', 'name' => 'Jamiu Abdullahi Olalekan', 'phone' => '7073247811'],
-    ['matric' => '2025003523', 'name' => 'LIGALI OLUWASEGUN OLUMAYOWA', 'phone' => '8126479848'],
-    ['matric' => '2025002782', 'name' => 'Adekanye seyi semilore', 'phone' => '9115660920'],
-    ['matric' => '2025007581', 'name' => 'Adepetu Peter taiwo', 'phone' => '8077923006'],
-    ['matric' => '2025001994', 'name' => 'Taofeeq uthman Timilehin', 'phone' => '8122069891'],
-    ['matric' => '2025007041', 'name' => 'Oluwafemi Daniel Iyiola', 'phone' => '8128711370'],
-    ['matric' => '2025003519', 'name' => 'Alagbe Michael Kehinde', 'phone' => '8128972860'],
-    ['matric' => '2025006425', 'name' => 'Ojeabi-Champion Praise Erinayo', 'phone' => '9069380243'],
-    ['matric' => '2025003870', 'name' => 'Obiye Isaac Osareemen', 'phone' => '9114220817'],
-    ['matric' => '2025003210', 'name' => 'ADEMOLA BOLUWATIFE JEREMIAH', 'phone' => '8025073532'],
-    ['matric' => '2025002074', 'name' => 'Olatunji Testimony Israel', 'phone' => '9015037316'],
-    // Test account
-    ['matric' => 'TEST001', 'name' => 'Test Student', 'phone' => '1234567890']
-];
+require __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = trim($_POST['matric_no'] ?? '');
-    
-    // Check if student is authorized by matric number OR phone number
-    $found = false;
-    foreach ($authorizedStudents as $student) {
-        if (strtoupper($student['matric']) === strtoupper($input) || 
-            $student['phone'] === $input) {
-            $_SESSION['student_matric'] = $student['matric'];
+
+    // Lookup student by identifier (matric) or phone in DB
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare('SELECT identifier, name, phone, group_id FROM students WHERE UPPER(identifier) = UPPER(?) OR phone = ? LIMIT 1');
+        $stmt->execute([$input, $input]);
+        $student = $stmt->fetch();
+
+        if ($student) {
+            $_SESSION['student_matric'] = $student['identifier'];
             $_SESSION['student_name'] = $student['name'];
-            $_SESSION['student_phone'] = $student['phone'];
-            $found = true;
-            break;
+            $_SESSION['student_phone'] = $student['phone'] ?? '';
+            $_SESSION['student_group'] = isset($student['group_id']) && (int)$student['group_id'] > 0 ? (int)$student['group_id'] : 1;
+            echo json_encode(['success' => true, 'redirect' => 'quiz_new.php']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'You are not authorized to take this quiz. Please contact your instructor.']);
         }
-    }
-    
-    if ($found) {
-        // Try to fetch group from students table; default to Group 1
-        $group = 1;
-        try {
-            require __DIR__ . '/db.php';
-            $pdo = db();
-            $gstmt = $pdo->prepare('SELECT group_id FROM students WHERE identifier = ? LIMIT 1');
-            $gstmt->execute([$_SESSION['student_matric']]);
-            $gRow = $gstmt->fetch();
-            if ($gRow && isset($gRow['group_id'])) {
-                $group = (int)$gRow['group_id'];
-            }
-        } catch (Exception $e) {
-            $group = 1;
-        }
-        $_SESSION['student_group'] = $group;
-        echo json_encode(['success' => true, 'redirect' => 'quiz_new.php']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'You are not authorized to take this quiz. Please contact your instructor.']);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Server error during verification. Please try again.']);
     }
     exit;
 }

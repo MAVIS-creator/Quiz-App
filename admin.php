@@ -41,7 +41,19 @@ $violations = $violStmt->fetchAll();
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        /* Design tokens */
+        :root {
+            --brand-start: #6366f1; /* indigo-500 */
+            --brand-end: #7c3aed;   /* violet-600 */
+            --accent: #10b981;      /* emerald-500 */
+            --surface: #ffffff;
+            --muted: #f8fafc;       /* slate-50 */
+            --border: #e5e7eb;      /* gray-200 */
+            --text-primary: #0f172a; /* slate-900 */
+            --text-muted: #64748b;  /* slate-500 */
+        }
+
+        .gradient-bg { background: linear-gradient(135deg, var(--brand-start) 0%, var(--brand-end) 100%); }
         .gradient-text {
             background: linear-gradient(90deg, #3b82f6, #eab308, #3b82f6);
             background-size: 200% auto;
@@ -54,27 +66,44 @@ $violations = $violStmt->fetchAll();
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
         }
+
+        /* React-like components */
+        .ui-card {
+            background: var(--surface);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 20px rgba(2, 6, 23, 0.06);
+            border: 1px solid var(--border);
+        }
+        .ui-card-header { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; color: var(--text-primary); }
+        .ui-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.35rem .6rem; border-radius:.75rem; background: rgba(124,58,237,.12); color:#6d28d9; font-weight:600; font-size:.75rem; }
+        .ui-btn { transition: all .2s ease; box-shadow: 0 6px 12px rgba(2, 6, 23, 0.08); }
+        .ui-btn:hover { transform: translateY(-1px); }
+        .ui-input { border-width: 2px; }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Header -->
-    <header class="gradient-bg text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <header class="gradient-bg text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex justify-between items-center">
-                <div class="flex items-center">
-                    <i class='bx bxs-dashboard text-4xl mr-3'></i>
+                <div class="flex items-center gap-3">
+                    <i class='bx bxs-dashboard text-3xl'></i>
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-bold">Admin Dashboard - Group <?php echo $adminGroup; ?></h1>
-                        <p class="text-white/80 text-sm">Welcome, <?php echo htmlspecialchars($adminUsername); ?></p>
+                        <h1 class="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
+                        <div class="ui-chip mt-1">
+                            <i class='bx bxs-group'></i>
+                            Group <?php echo $adminGroup; ?>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <a href="proctor.php" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition font-semibold flex items-center">
-                        <i class='bx bx-video text-xl mr-2'></i>
+                <div class="flex items-center gap-3">
+                    <span class="hidden md:inline text-white/80 text-sm">Welcome, <?php echo htmlspecialchars($adminUsername); ?></span>
+                    <a href="proctor.php" class="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition font-semibold flex items-center ui-btn">
+                        <i class='bx bx-video text-lg mr-2'></i>
                         Proctor View
                     </a>
-                    <a href="?logout" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition font-semibold flex items-center">
-                        <i class='bx bx-log-out text-xl mr-2'></i>
+                    <a href="?logout" class="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition font-semibold flex items-center ui-btn">
+                        <i class='bx bx-log-out text-lg mr-2'></i>
                         Logout
                     </a>
                 </div>
@@ -86,7 +115,7 @@ $violations = $violStmt->fetchAll();
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <!-- Quiz Configuration -->
-            <div class="bg-white rounded-2xl p-6 shadow-lg">
+            <div class="ui-card p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                     <i class='bx bx-cog text-2xl mr-2 text-purple-600'></i>
                     Quiz Configuration
@@ -100,7 +129,7 @@ $violations = $violStmt->fetchAll();
                             value="<?php echo $cfg['question_count'] ?? 40; ?>" 
                             min="1" 
                             max="100"
-                            class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                            class="ui-input w-full px-4 py-3 rounded-lg border-gray-200 focus:border-purple-500 focus:outline-none"
                         >
                     </div>
                     <div>
@@ -111,13 +140,13 @@ $violations = $violStmt->fetchAll();
                             value="<?php echo $cfg['exam_minutes'] ?? 60; ?>" 
                             min="5" 
                             max="300"
-                            class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                            class="ui-input w-full px-4 py-3 rounded-lg border-gray-200 focus:border-purple-500 focus:outline-none"
                         >
                     </div>
                     <button 
                         type="button" 
                         id="saveCfg"
-                        class="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold py-3 px-6 rounded-lg hover:from-purple-700 hover:to-purple-900 transition flex items-center justify-center"
+                        class="ui-btn w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold py-3 px-6 rounded-lg hover:from-purple-700 hover:to-purple-900 transition flex items-center justify-center"
                     >
                         <i class='bx bx-save text-xl mr-2'></i>
                         Save Configuration
@@ -126,25 +155,25 @@ $violations = $violStmt->fetchAll();
             </div>
 
             <!-- Import Questions -->
-            <div class="bg-white rounded-2xl p-6 shadow-lg">
+            <div class="ui-card p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                     <i class='bx bx-upload text-2xl mr-2 text-blue-600'></i>
-                    Import Questions (Markdown)
+                    Import Questions
                 </h2>
                 <form id="questionForm" class="space-y-4">
                     <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50 hover:border-blue-400 transition">
                         <div class="flex items-center justify-between mb-2">
                             <div>
-                                <p class="text-sm font-semibold text-gray-800">Upload .md File (Group <?php echo $adminGroup; ?>)</p>
+                                <p class="text-sm font-semibold text-gray-800">Upload .md/.txt File (Group <?php echo $adminGroup; ?>)</p>
                                 <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
                             </div>
                             <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
-                                <i class='bx bx-download'></i> Download sample
+                                <i class='bx bx-download'></i> Download MD sample
                             </a>
                         </div>
                         <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
                             <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
-                            <span class="text-sm font-semibold text-gray-700">Choose Markdown File</span>
+                            <span class="text-sm font-semibold text-gray-700">Choose Markdown/Text File</span>
                             <input 
                                 type="file" 
                                 id="questionFile" 
@@ -157,16 +186,47 @@ $violations = $violStmt->fetchAll();
                     <button 
                         type="button" 
                         id="importQuestions"
-                        class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center shadow-md"
+                        class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center"
                     >
                         <i class='bx bx-upload text-xl mr-2'></i>
-                        Import Questions
+                        Import Questions (MD/TXT)
+                    </button>
+
+                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50 hover:border-blue-400 transition mt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload .csv File (Group <?php echo $adminGroup; ?>)</p>
+                                <p class="text-xs text-gray-500">Headers: Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer</p>
+                            </div>
+                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                <i class='bx bx-download'></i> Download CSV sample
+                            </a>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
+                            <input 
+                                type="file" 
+                                id="questionCsvFile" 
+                                accept=".csv"
+                                class="hidden"
+                            >
+                        </label>
+                        <p id="questionCsvFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button 
+                        type="button" 
+                        id="importQuestionsCsv"
+                        class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center"
+                    >
+                        <i class='bx bx-upload text-xl mr-2'></i>
+                        Import Questions (CSV)
                     </button>
                 </form>
             </div>
 
             <!-- Quick Stats -->
-            <div class="bg-white rounded-2xl p-6 shadow-lg">
+            <div class="ui-card p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                     <i class='bx bx-bar-chart text-2xl mr-2 text-purple-600'></i>
                     Quick Statistics
@@ -190,6 +250,83 @@ $violations = $violStmt->fetchAll();
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Manual Add: Question -->
+        <div class="ui-card p-6 mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-plus-circle text-2xl mr-2 text-blue-600'></i>
+                Add Question (Group <?php echo $adminGroup; ?>)
+            </h2>
+            <form id="addQuestionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Prompt</label>
+                    <textarea id="qPrompt" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" rows="3" placeholder="Enter question text"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option A</label>
+                    <input id="qA" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option B</label>
+                    <input id="qB" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option C</label>
+                    <input id="qC" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Option D</label>
+                    <input id="qD" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Correct Option</label>
+                    <select id="qAnswer" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Category (optional)</label>
+                    <input id="qCategory" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none" placeholder="e.g., General" />
+                </div>
+                <div class="md:col-span-2">
+                    <button type="button" id="addQuestionBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center justify-center shadow-md">
+                        <i class='bx bx-plus-circle text-xl mr-2'></i>
+                        Add Question
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Manual Add: Student -->
+        <div class="ui-card p-6 mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-user-plus text-2xl mr-2 text-green-600'></i>
+                Add Student (Group <?php echo $adminGroup; ?>)
+            </h2>
+            <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Name</label>
+                    <input id="sName" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Matric / Identifier</label>
+                    <input id="sId" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Phone (optional)</label>
+                    <input id="sPhone" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none" />
+                </div>
+                <div class="md:col-span-3">
+                    <button type="button" id="addStudentBtn" class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center shadow-md">
+                        <i class='bx bx-user-plus text-xl mr-2'></i>
+                        Add Student
+                    </button>
+                </div>
+            </form>
         </div>
 
         <!-- Sessions Table -->
@@ -287,7 +424,7 @@ $violations = $violStmt->fetchAll();
                 <button 
                     type="button" 
                     id="importStudents"
-                    class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center shadow-md"
+                    class="ui-btn w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center justify-center"
                 >
                     <i class='bx bx-upload text-xl mr-2'></i>
                     Import Students
@@ -296,7 +433,7 @@ $violations = $violStmt->fetchAll();
         </div>
 
         <!-- Violations Summary -->
-        <div class="bg-white rounded-2xl p-6 shadow-lg">
+        <div class="ui-card p-6">
             <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <i class='bx bx-error text-2xl mr-2 text-red-600'></i>
                 Violations Summary (Sorted by Student)
@@ -502,6 +639,14 @@ $violations = $violStmt->fetchAll();
             });
         }
 
+        const qCsvFile = document.getElementById('questionCsvFile');
+        const qCsvFileName = document.getElementById('questionCsvFileName');
+        if (qCsvFile && qCsvFileName) {
+            qCsvFile.addEventListener('change', () => {
+                qCsvFileName.textContent = qCsvFile.files.length ? qCsvFile.files[0].name : 'No file chosen';
+            });
+        }
+
         const sFile = document.getElementById('studentFile');
         const sFileName = document.getElementById('studentFileName');
         if (sFile && sFileName) {
@@ -544,6 +689,107 @@ $violations = $violStmt->fetchAll();
                 Swal.fire('Error', 'Import failed: ' + err.message, 'error');
             }
         };
+
+        // Question CSV Import Handler
+        document.getElementById('importQuestionsCsv').onclick = async () => {
+            const file = document.getElementById('questionCsvFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a CSV file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_import_csv.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Questions Imported (CSV)',
+                        text: data.message + `\n\nImported: ${data.imported}/${data.total}`,
+                        confirmButtonColor: '#3085d6'
+                    });
+                    document.getElementById('questionCsvFile').value = '';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Import failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Import failed: ' + err.message, 'error');
+            }
+        };
+
+        // Manual Add Question
+        document.getElementById('addQuestionBtn').onclick = async () => {
+            const prompt = document.getElementById('qPrompt').value.trim();
+            const A = document.getElementById('qA').value.trim();
+            const B = document.getElementById('qB').value.trim();
+            const C = document.getElementById('qC').value.trim();
+            const D = document.getElementById('qD').value.trim();
+            const ansKey = document.getElementById('qAnswer').value;
+            const category = document.getElementById('qCategory').value.trim() || 'General';
+
+            const map = { A, B, C, D };
+            const answer = map[ansKey];
+            if (!prompt || !A || !B || !C || !D || !answer) {
+                Swal.fire('Error', 'Please fill all fields', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/question_add.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, option_a: A, option_b: B, option_c: C, option_d: D, answer, category })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Question Added', text: data.message });
+                    document.getElementById('addQuestionForm').reset();
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Add failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Add failed: ' + err.message, 'error');
+            }
+        };
+
+        // Manual Add Student
+        document.getElementById('addStudentBtn').onclick = async () => {
+            const name = document.getElementById('sName').value.trim();
+            const identifier = document.getElementById('sId').value.trim();
+            const phone = document.getElementById('sPhone').value.trim();
+
+            if (!name || !identifier) {
+                Swal.fire('Error', 'Name and Matric/Identifier are required', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/student_add.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, identifier, phone })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Student Added', text: data.message });
+                    document.getElementById('addStudentForm').reset();
+                } else {
+                    Swal.fire('Error', data.error || 'Add failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Add failed: ' + err.message, 'error');
+            }
+        };
+
 
         // Student Import Handler
         document.getElementById('importStudents').onclick = async () => {

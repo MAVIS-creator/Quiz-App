@@ -310,6 +310,72 @@
                 logTest('Audio Clip POST', 'fail', e.message);
             }
 
+            // Test 15: Audio Save POST
+            try {
+                const response = await fetch(`${API}/audio_save.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: 'TEST001',
+                        audio: 'data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC',
+                        duration: 3.5
+                    })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    logTest('Audio Save POST', 'pass', data);
+                } else {
+                    logTest('Audio Save POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Audio Save POST', 'fail', e.message);
+            }
+
+            // Test 16: Student Import POST
+            try {
+                const formData = new FormData();
+                const csv = 'Name,Matric,Phone\nSample Student,IMPTEST001,08099998888';
+                formData.append('file', new Blob([csv], { type: 'text/csv' }), 'students.csv');
+                const response = await fetch(`${API}/student_import.php`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    logTest('Student Import POST', 'pass', data);
+                } else {
+                    logTest('Student Import POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Student Import POST', 'fail', e.message);
+            }
+
+            // Test 17: Question Import POST
+            try {
+                const md = [
+                    '# Group 1',
+                    '## Imported Question',
+                    'Option A',
+                    '~~Option B~~',
+                    'Option C',
+                    'Option D'
+                ].join('\n');
+                const formData = new FormData();
+                formData.append('file', new Blob([md], { type: 'text/markdown' }), 'questions.md');
+                const response = await fetch(`${API}/question_import.php`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    logTest('Question Import POST', 'pass', data);
+                } else {
+                    logTest('Question Import POST', 'fail', data);
+                }
+            } catch (e) {
+                logTest('Question Import POST', 'fail', e.message);
+            }
+
             console.log('✅ All tests completed!');
         }
 

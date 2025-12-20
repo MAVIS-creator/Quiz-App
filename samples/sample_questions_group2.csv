@@ -1,0 +1,4 @@
+Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer
+2,General,Which CSS property sets the background color?,background-color,back-color,color-background,bg,background-color
+2,General,What does HTML stand for?,Hyperlinks and Text Markup Language,Home Tool Markup Language,Hyper Text Markup Language,Hyper Text Makeup Language,Hyper Text Markup Language
+2,General,Which tag creates an ordered list?,<ul>,<ol>,<li>,<list>,<ol>

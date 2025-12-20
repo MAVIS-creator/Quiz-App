@@ -1,0 +1,4 @@
+Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer
+1,General,What is the correct HTML tag for a line break?,<br>,<lb>,<break>,<hr>,<br>
+1,General,Which CSS property changes text color?,font-color,text-color,color,foreground,color
+1,General,Which HTML tag defines a hyperlink?,<a>,<link>,<href>,<url>,<a>
