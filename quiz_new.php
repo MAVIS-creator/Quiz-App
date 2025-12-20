@@ -193,7 +193,7 @@ foreach ($questionIds as $qid) {
             padding: 1rem;
             z-index: 40;
             max-height: calc(100vh - 200px);
-            overflow-y-auto;
+            overflow-y: auto;
             display: none;
         }
 
@@ -205,7 +205,7 @@ foreach ($questionIds as $qid) {
             font-weight: bold;
             margin-bottom: 0.75rem;
             font-size: 0.875rem;
-            text-gray-700;
+            color: #374151;
             display: flex;
             justify-content: space-between;
             align-items: center;

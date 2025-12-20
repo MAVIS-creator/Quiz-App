@@ -15,6 +15,10 @@ if (!isset($_SESSION['admin_logged_in'])) {
     exit;
 }
 
+// Redirect to enhanced dashboard to keep a single admin UI
+header('Location: admin-enhanced.php');
+exit;
+
 $adminGroup = $_SESSION['admin_group'] ?? 1;
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 

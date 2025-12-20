@@ -20,6 +20,7 @@ $students = [
     ['name' => 'Odelabi John Oluwagboogo', 'matric' => '2025002331', 'phone' => '7046594294'],
     ['name' => 'Adeyi Daniel Olumide', 'matric' => '2025000879', 'phone' => '7034755802'],
     ['name' => 'Ogunlola Muhammad Olatunde', 'matric' => '2025003272', 'phone' => '8089188642'],
+    // Use phone as fallback identifier when matric is missing
     ['name' => 'Oladipo David', 'matric' => null, 'phone' => '7033535484'],
     ['name' => 'ojo Emmanuel oluwastemi', 'matric' => '2025004011', 'phone' => '8088732400'],
 ];
@@ -30,16 +31,17 @@ $skipped = 0;
 
 try {
     foreach ($students as $student) {
-        // Skip if no matric
-        if (!$student['matric']) {
-            echo "Skipping: {$student['name']} (no matric)\n";
+        // Allow either matric or phone as identifier
+        $identifier = $student['matric'] ?: $student['phone'];
+        if (!$identifier) {
+            echo "Skipping: {$student['name']} (no matric or phone)\n";
             $skipped++;
             continue;
         }
 
         // Check if already exists
         $check = $pdo->prepare('SELECT id FROM students WHERE identifier = ? AND group_id = 2');
-        $check->execute([$student['matric']]);
+        $check->execute([$identifier]);
         
         if ($check->fetch()) {
             echo "Already exists: {$student['name']} ({$student['matric']})\n";
@@ -49,9 +51,9 @@ try {
 
         // Insert student
         $stmt = $pdo->prepare('INSERT INTO students (name, identifier, phone, group_id) VALUES (?, ?, ?, 2)');
-        $stmt->execute([$student['name'], $student['matric'], $student['phone']]);
+        $stmt->execute([$student['name'], $identifier, $student['phone']]);
         $inserted++;
-        echo "✓ Added: {$student['name']} ({$student['matric']})\n";
+        echo "✓ Added: {$student['name']} ({$identifier})\n";
     }
 
     $pdo->commit();

@@ -230,7 +230,7 @@ $stats = $statsStmt->fetch();
         </div>
 
         <!-- Import & Management Section -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <a href="#" class="ui-card p-6 text-center cursor-pointer group">
                 <div class="inline-block p-3 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
                     <i class='bx bx-upload text-3xl text-blue-600'></i>
@@ -253,6 +253,14 @@ $stats = $statsStmt->fetch();
                 </div>
                 <h3 class="font-bold text-lg mb-1">Configuration</h3>
                 <p class="text-sm text-gray-600">Manage exam settings</p>
+            </a>
+
+            <a href="proctor.php" class="ui-card p-6 text-center cursor-pointer group">
+                <div class="inline-block p-3 bg-gradient-to-br from-red-100 to-red-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
+                    <i class='bx bx-shield-quarter text-3xl text-red-600'></i>
+                </div>
+                <h3 class="font-bold text-lg mb-1">Proctor Console</h3>
+                <p class="text-sm text-gray-600">Open live proctoring</p>
             </a>
         </div>
 
