@@ -404,8 +404,14 @@ if ($studentFilter) {
                 if (Array.isArray(clips) && clips.length > 0) {
                     let html = `<div class="space-y-3">`;
                     clips.forEach((clip, idx) => {
-                        const audioUrl = clip.url;
+                        const audioUrl = clip.url || (clip.audio_data ? `data:audio/webm;base64,${clip.audio_data}` : '');
                         const duration = clip.duration ? `(${clip.duration}s)` : '';
+                        // Guess mime type
+                        let mimeType = 'audio/webm';
+                        if (audioUrl.endsWith('.wav')) mimeType = 'audio/wav';
+                        else if (audioUrl.endsWith('.mp3') || audioUrl.startsWith('data:audio/mp3')) mimeType = 'audio/mpeg';
+                        else if (audioUrl.endsWith('.webm') || audioUrl.startsWith('data:audio/webm')) mimeType = 'audio/webm';
+
                         html += `
                             <div class="border rounded-lg p-4 bg-blue-50 hover:shadow-md transition">
                                 <div class="flex items-center justify-between mb-2">
@@ -413,8 +419,7 @@ if ($studentFilter) {
                                     <span class="text-xs text-gray-500">${clip.created_at || 'N/A'}</span>
                                 </div>
                                 <audio controls class="w-full" style="max-width: 500px;">
-                                    <source src="${audioUrl}" type="audio/wav">
-                                    <source src="${audioUrl}" type="audio/webm">
+                                    ${audioUrl ? `<source src="${audioUrl}" type="${mimeType}">` : ''}
                                     Your browser does not support audio playback.
                                 </audio>
                             </div>

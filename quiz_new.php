@@ -323,8 +323,9 @@ foreach ($questionIds as $qid) {
                     <!-- Timer -->
                     <div class="text-center">
                         <div class="text-sm opacity-90">Time Remaining</div>
-                        <div id="timer" class="text-2xl font-bold">
+                        <div id="timer" class="text-2xl font-bold flex items-center justify-center gap-2">
                             <span id="minutes"><?php echo floor($totalSeconds / 60); ?></span>:<span id="seconds">00</span>
+                            <span id="timeAdjBadge" class="hidden text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200"></span>
                         </div>
                     </div>
 
@@ -601,6 +602,20 @@ foreach ($questionIds as $qid) {
                             timer: 2500,
                             showConfirmButton: false
                         });
+                        // Update adjustment badge
+                        const badge = document.getElementById('timeAdjBadge');
+                        if (badge) {
+                            badge.textContent = `${added ? '+' : '-'}${Math.abs(Math.round(delta/60))}m`;
+                            badge.classList.remove('hidden');
+                            badge.classList.toggle('bg-indigo-100', added);
+                            badge.classList.toggle('bg-red-100', !added);
+                            badge.classList.toggle('text-indigo-700', added);
+                            badge.classList.toggle('text-red-700', !added);
+                            badge.classList.toggle('border-indigo-200', added);
+                            badge.classList.toggle('border-red-200', !added);
+                            // Hide after a short while
+                            setTimeout(() => { badge.classList.add('hidden'); }, 6000);
+                        }
                     }
                 } catch (e) {
                     console.error('Status/time polling failed:', e);
