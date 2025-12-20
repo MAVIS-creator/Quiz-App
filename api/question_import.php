@@ -76,11 +76,14 @@ try {
         // Option line (can be marked with ~~ to indicate correct answer)
         if ($currentQuestion !== null && !empty($line)) {
             if (preg_match('/^~~(.+)~~$/', $line, $m)) {
-                // This is the correct answer
+                // This marks which of the 4 options is correct
                 $answer = trim($m[1]);
-                $options[] = trim($m[1]);
+                // Don't add to options - it should already be there
             } else {
-                $options[] = $line;
+                // Regular option - add only if we have less than 4
+                if (count($options) < 4) {
+                    $options[] = $line;
+                }
             }
         }
     }

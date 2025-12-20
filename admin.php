@@ -225,6 +225,43 @@ $violations = $violStmt->fetchAll();
                 </form>
             </div>
 
+            <!-- Delete Questions -->
+            <div class="ui-card p-6">
+                <h2 class="ui-card-header text-xl font-bold">
+                    <i class='bx bx-trash text-2xl text-red-600'></i>
+                    <span>Delete Questions</span>
+                </h2>
+                <form id="deleteQuestionForm" class="space-y-4">
+                    <div class="border-2 border-dashed border-red-200 rounded-xl p-4 bg-red-50/50 hover:border-red-400 transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Upload .md/.txt or .csv File</p>
+                                <p class="text-xs text-gray-500">Questions matching the prompt will be deleted</p>
+                            </div>
+                        </div>
+                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-red-200 hover:border-red-400 cursor-pointer shadow-sm">
+                            <i class='bx bx-trash text-xl text-red-600 mr-2'></i>
+                            <span class="text-sm font-semibold text-gray-700">Choose File to Delete</span>
+                            <input 
+                                type="file" 
+                                id="deleteQuestionFile" 
+                                accept=".md,.txt,.csv"
+                                class="hidden"
+                            >
+                        </label>
+                        <p id="deleteQuestionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                    </div>
+                    <button 
+                        type="button" 
+                        id="deleteQuestions"
+                        class="ui-btn w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 px-6 rounded-lg hover:from-red-700 hover:to-red-900 transition flex items-center justify-center"
+                    >
+                        <i class='bx bx-trash text-xl mr-2'></i>
+                        Delete Matching Questions
+                    </button>
+                </form>
+            </div>
+
             <!-- Quick Stats -->
             <div class="ui-card p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -647,6 +684,14 @@ $violations = $violStmt->fetchAll();
             });
         }
 
+        const delFile = document.getElementById('deleteQuestionFile');
+        const delFileName = document.getElementById('deleteQuestionFileName');
+        if (delFile && delFileName) {
+            delFile.addEventListener('change', () => {
+                delFileName.textContent = delFile.files.length ? delFile.files[0].name : 'No file chosen';
+            });
+        }
+
         const sFile = document.getElementById('studentFile');
         const sFileName = document.getElementById('studentFileName');
         if (sFile && sFileName) {
@@ -787,6 +832,59 @@ $violations = $violStmt->fetchAll();
                 }
             } catch (err) {
                 Swal.fire('Error', 'Add failed: ' + err.message, 'error');
+            }
+        };
+
+        // Delete Questions Handler
+        document.getElementById('deleteQuestions').onclick = async () => {
+            const file = document.getElementById('deleteQuestionFile').files[0];
+            if (!file) {
+                Swal.fire('Error', 'Please select a file with questions to delete', 'error');
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Confirm Deletion',
+                text: 'This will permanently delete all matching questions. Continue?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete them',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/question_delete.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deletion Complete',
+                        html: `
+                            <p>${data.message}</p>
+                            <p class="mt-2">Deleted: ${data.deleted} / ${data.total}</p>
+                            ${data.not_found > 0 ? `<p class="text-yellow-600">Not found: ${data.not_found}</p>` : ''}
+                        `,
+                        confirmButtonColor: '#3085d6'
+                    });
+                    document.getElementById('deleteQuestionFile').value = '';
+                    document.getElementById('deleteQuestionFileName').textContent = 'No file chosen';
+                    setTimeout(pollDashboard, 1000);
+                } else {
+                    Swal.fire('Error', data.error || 'Deletion failed', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Deletion failed: ' + err.message, 'error');
             }
         };
 

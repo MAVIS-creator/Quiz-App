@@ -4,17 +4,20 @@
 Blue
 Green
 Red
+Yellow
 ~~Blue~~
 
 ## Which device is used to compute?
 Keyboard
 Mouse
 Monitor
+Computer
 ~~Computer~~
 
 ## What is 5 + 7?
 10
 11
+12
 13
 ~~12~~
 
@@ -22,10 +25,12 @@ Monitor
 Carrot
 Potato
 Lettuce
+Apple
 ~~Apple~~
 
 ## Which is a browser?
 Chrome
 Paint
+Excel
 Notepad
 ~~Chrome~~
