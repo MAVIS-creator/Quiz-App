@@ -340,6 +340,14 @@ foreach ($questionIds as $qid) {
 
     <!-- Message Notification Area -->
     <div id="messageNotification" class="message-notification hidden"></div>
+    <!-- Scrollable Message Feed -->
+    <div id="messageFeed" class="fixed bottom-6 right-6 w-80 max-h-64 overflow-y-auto bg-white/90 backdrop-blur rounded-xl shadow-lg border border-gray-200 hidden">
+        <div class="px-4 py-2 border-b text-sm font-semibold text-gray-700 flex items-center justify-between">
+            <span><i class='bx bx-message-square-dots mr-1'></i>Admin Messages</span>
+            <button onclick="document.getElementById('messageFeed').classList.add('hidden')" class="text-gray-500 hover:text-gray-700"><i class='bx bx-x'></i></button>
+        </div>
+        <div id="messageFeedBody" class="p-3 space-y-2 text-sm"></div>
+    </div>
 
     <div class="max-w-7xl mx-auto px-4 py-8">
         <div class="mb-6 bg-white rounded-xl shadow-md p-4">
@@ -423,6 +431,7 @@ foreach ($questionIds as $qid) {
         const sessionId = '<?php echo $_SESSION['quiz_session_id']; ?>';
         
         let timeLeft = <?php echo $totalSeconds; ?>;
+        let appliedAdjustment = <?php echo (int)($timeAdjustment ?? 0); ?>;
         let answeredQuestions = new Set();
         let answers = {};
         let timings = {};
@@ -443,6 +452,7 @@ foreach ($questionIds as $qid) {
             autoSave();
             checkMessages();
             monitorTabSwitches();
+            pollStatusAdjustments();
         });
         
         // Timer
@@ -543,6 +553,60 @@ foreach ($questionIds as $qid) {
                 }
             }, 5000);
         }
+
+        // Poll for status changes and time adjustments every 5 seconds
+        function pollStatusAdjustments() {
+            setInterval(async function() {
+                try {
+                    const response = await fetch(`${API}/sessions.php`);
+                    const sessions = await response.json();
+                    const latest = sessions
+                        .filter(s => s.identifier === identifier && Number(s.group) === studentGroup)
+                        .sort((a, b) => new Date(b.last_saved || b.created_at || 0) - new Date(a.last_saved || a.created_at || 0))[0];
+                    if (!latest) return;
+
+                    // Handle mid-exam termination
+                    const status = String(latest.status || '').toLowerCase();
+                    if (status === 'booted' || status === 'cancelled') {
+                        if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+                        Swal.fire({
+                            icon: 'error',
+                            title: status === 'booted' ? 'Exam Terminated' : 'Exam Cancelled',
+                            text: 'You have been removed from the exam by the administrator.',
+                            confirmButtonColor: '#dc2626',
+                            allowOutsideClick: false
+                        }).then(() => { window.location.href = 'login.php'; });
+                        return;
+                    }
+
+                    // If submitted elsewhere, finish here
+                    if (Number(latest.submitted) === 1) {
+                        if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+                        Swal.fire({ icon: 'success', title: 'Quiz Submitted!', timer: 1500, showConfirmButton: false })
+                            .then(() => { window.location.href = 'result.php'; });
+                        return;
+                    }
+
+                    // Apply time adjustment delta
+                    const newAdj = Number(latest.time_adjustment_seconds || 0);
+                    if (!Number.isNaN(newAdj) && newAdj !== appliedAdjustment) {
+                        const delta = newAdj - appliedAdjustment;
+                        appliedAdjustment = newAdj;
+                        timeLeft = Math.max(0, timeLeft + delta);
+                        const added = delta > 0;
+                        Swal.fire({
+                            icon: added ? 'info' : 'warning',
+                            title: added ? 'Time Added' : 'Time Deducted',
+                            text: `${Math.abs(Math.round(delta/60))} minute(s) ${added ? 'added' : 'deducted'} by admin`,
+                            timer: 2500,
+                            showConfirmButton: false
+                        });
+                    }
+                } catch (e) {
+                    console.error('Status/time polling failed:', e);
+                }
+            }, 5000);
+        }
         
         // Camera monitoring
         async function initCamera() {
@@ -631,18 +695,43 @@ foreach ($questionIds as $qid) {
             
             const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
             
-            // Send to server
+            // Send preview snapshot to server
             try {
                 await fetch(`${API}/snapshot.php`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         identifier: identifier,
-                        image: dataUrl
+                        image: dataUrl,
+                        type: 'preview'
                     })
                 });
             } catch (e) {
                 console.error('Snapshot failed:', e);
+            }
+        }
+
+        // Capture violation snapshot on demand
+        async function sendViolationSnapshot() {
+            try {
+                const canvas = document.getElementById('snapshot');
+                const video = document.getElementById('camera');
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                await fetch(`${API}/snapshot.php`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        image: dataUrl,
+                        type: 'violation'
+                    })
+                });
+            } catch (e) {
+                console.error('Violation snapshot failed:', e);
             }
         }
         
@@ -663,10 +752,17 @@ foreach ($questionIds as $qid) {
                 setInterval(function() {
                     audioAnalyser.getByteFrequencyData(dataArray);
                     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                    
-                    // Loud voice detected (threshold: 100)
-                    if (average > 100) {
-                        logAudioDetection(Math.floor(average));
+                    const vol = Math.floor(average);
+                    let severity = 0;
+                    let levelLabel = '';
+                    // Audio levels: medium (>90), high (>140)
+                    if (vol > 140) { severity = 3; levelLabel = 'high'; }
+                    else if (vol > 90) { severity = 2; levelLabel = 'medium'; }
+
+                    if (severity > 0) {
+                        logAudioDetection(vol, severity, levelLabel);
+                        // Capture violation snapshot alongside audio violation
+                        sendViolationSnapshot();
                         
                         // Start recording 5-10 second clip when loud sound detected
                         if (!isRecordingLoudSound && mediaRecorder && mediaRecorder.state === 'recording') {
@@ -694,7 +790,7 @@ foreach ($questionIds as $qid) {
             }
         }
         
-        async function logAudioDetection(volume) {
+        async function logAudioDetection(volume, severity = 2, levelLabel = 'medium') {
             try {
                 await fetch(`${API}/violations.php`, {
                     method: 'POST',
@@ -702,8 +798,8 @@ foreach ($questionIds as $qid) {
                     body: JSON.stringify({
                         identifier: identifier,
                         type: 'loud_audio',
-                        severity: 2,
-                        message: `Loud audio detected (volume: ${volume})`
+                        severity: severity,
+                        message: `Detected ${levelLabel} audio (volume: ${volume})`
                     })
                 });
             } catch (e) {
@@ -741,32 +837,77 @@ foreach ($questionIds as $qid) {
                         message: message
                     })
                 });
+                // Also capture a violation snapshot
+                sendViolationSnapshot();
             } catch (e) {
                 console.error('Violation log failed:', e);
             }
         }
         
         // Check for messages from admin
+        let seenMessageKeys = new Set();
         function checkMessages() {
             setInterval(async function() {
                 try {
-                    const response = await fetch(`${API}/messages.php?a=${identifier}`);
-                    const data = await response.json();
-                    
-                    if (data.unread_count > 0) {
-                        // Fetch actual messages
-                        const messagesResponse = await fetch(`${API}/messages.php?a=${identifier}&b=admin`);
-                        const messages = await messagesResponse.json();
-                        const latestMessage = messages[messages.length - 1];
-                        
-                        if (latestMessage && latestMessage.sender === 'admin') {
-                            showMessageNotification(latestMessage.text);
+                    const response = await fetch(`${API}/messages.php?a=${identifier}&b=admin`);
+                    const messages = await response.json();
+                    if (Array.isArray(messages) && messages.length) {
+                        const feed = document.getElementById('messageFeed');
+                        const feedBody = document.getElementById('messageFeedBody');
+                        let newCount = 0;
+                        messages.forEach(msg => {
+                            const key = (msg.id ?? '') + '|' + (msg.created_at ?? '') + '|' + (msg.text ?? '');
+                            if (!seenMessageKeys.has(key) && String(msg.sender).toLowerCase() === 'admin') {
+                                seenMessageKeys.add(key);
+                                newCount++;
+                                // If admin requested audio, record on demand
+                                if ((msg.text || '').toUpperCase().includes('REQUEST_AUDIO')) {
+                                    requestAudioClip();
+                                }
+                                // Append to feed
+                                const item = document.createElement('div');
+                                item.className = 'bg-blue-50 border border-blue-200 rounded p-2';
+                                item.innerHTML = `<div class="flex items-start"><i class='bx bx-message-rounded-detail text-blue-600 mr-2'></i><div><div class="text-xs text-gray-500">${msg.created_at || ''}</div><div class="text-gray-800">${escapeHtml(msg.text || '')}</div></div></div>`;
+                                feedBody.appendChild(item);
+                                // SweetAlert toast
+                                Swal.fire({
+                                    toast: true,
+                                    position: 'top-end',
+                                    icon: 'info',
+                                    title: 'Admin Message',
+                                    text: msg.text || '',
+                                    timer: 4000,
+                                    showConfirmButton: false
+                                });
+                            }
+                        });
+                        if (newCount > 0) {
+                            feed.classList.remove('hidden');
                         }
                     }
                 } catch (e) {
                     console.error('Message check failed:', e);
                 }
             }, 5000);
+        }
+
+        // Record an on-demand audio clip upon admin request
+        function requestAudioClip() {
+            try {
+                if (!cameraStream) return;
+                const audioStream = new MediaStream(cameraStream.getAudioTracks());
+                const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm;codecs=opus' });
+                const chunks = [];
+                recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+                recorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    await uploadAudioClip(blob);
+                };
+                recorder.start();
+                setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 8000);
+            } catch (e) {
+                console.error('On-demand audio failed:', e);
+            }
         }
         
         function showMessageNotification(message) {

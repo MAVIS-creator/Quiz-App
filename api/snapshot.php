@@ -8,13 +8,28 @@ try {
     if ($method === 'GET') {
         $id = $_GET['identifier'] ?? null;
         if (!$id) json_out(['error' => 'identifier required'], 400);
-        $stmt = $pdo->prepare('SELECT filename, timestamp FROM snapshots WHERE identifier=? ORDER BY timestamp DESC LIMIT 1');
-        $stmt->execute([$id]);
-        $row = $stmt->fetch();
-        if ($row && $row['filename']) {
-            $row['url'] = '/Quiz-App/uploads/' . $row['filename'];
+        $type = strtolower($_GET['type'] ?? 'preview'); // preview | violation
+        $limit = max(1, intval($_GET['limit'] ?? 1));
+
+        // Filter by filename prefix to avoid schema changes (no 'type' column assumed)
+        $prefix = $type === 'violation' ? 'snapshotv_' : 'snapshot_';
+        $sql = 'SELECT filename, timestamp FROM snapshots WHERE identifier=? AND filename LIKE ? ORDER BY timestamp DESC LIMIT ' . $limit;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$id, $prefix . '%']);
+
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            if ($row && $row['filename']) {
+                $row['url'] = '/Quiz-App/uploads/' . $row['filename'];
+            }
         }
-        json_out($row ?: ['filename' => null, 'timestamp' => null, 'url' => null]);
+
+        if ($limit === 1) {
+            $row = $rows[0] ?? null;
+            json_out($row ?: ['filename' => null, 'timestamp' => null, 'url' => null]);
+        } else {
+            json_out(['items' => $rows]);
+        }
     }
 
     if ($method === 'POST') {
@@ -22,6 +37,7 @@ try {
         if (!is_array($data)) json_out(['error' => 'Invalid payload'], 400);
         $id = $data['identifier'] ?? null;
         $image = $data['image'] ?? null;
+        $type = strtolower($data['type'] ?? 'preview'); // preview | violation
         if (!$id || !$image) json_out(['error' => 'identifier and image required'], 400);
 
         // Create uploads directory if it doesn't exist
@@ -34,12 +50,13 @@ try {
         if (preg_match('/^data:image\/(\w+);base64,(.*)$/', $image, $m)) {
             $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
             $data = base64_decode($m[2]);
-            $filename = 'snapshot_' . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
+            $prefix = $type === 'violation' ? 'snapshotv_' : 'snapshot_';
+            $filename = $prefix . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
             $filepath = $uploadsDir . '/' . $filename;
             
             if (file_put_contents($filepath, $data) !== false) {
                 $pdo->prepare('INSERT INTO snapshots(identifier,filename) VALUES (?,?)')->execute([$id, $filename]);
-                json_out(['ok' => true, 'filename' => $filename, 'url' => '/Quiz-App/uploads/' . $filename]);
+                json_out(['ok' => true, 'type' => $type, 'filename' => $filename, 'url' => '/Quiz-App/uploads/' . $filename]);
             } else {
                 json_out(['error' => 'Failed to save file'], 500);
             }

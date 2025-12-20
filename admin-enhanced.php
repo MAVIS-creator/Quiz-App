@@ -460,102 +460,136 @@ $stats = $statsStmt->fetch();
             <div class="flex items-center justify-between mb-4 pr-24">
                 <h3 class="text-xl font-bold">Question Management</h3>
             </div>
+
+            <!-- Tabs -->
+            <div class="mb-4 flex flex-wrap gap-2">
+                <button type="button" class="tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold bg-purple-600 text-white" data-tab="tab-md">
+                    <i class='bx bx-file mr-1'></i> Import MD/TXT
+                </button>
+                <button type="button" class="tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold" data-tab="tab-csv">
+                    <i class='bx bx-table mr-1'></i> Import CSV
+                </button>
+                <button type="button" class="tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold" data-tab="tab-delete">
+                    <i class='bx bx-trash mr-1'></i> Delete
+                </button>
+                <button type="button" class="tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold" data-tab="tab-add">
+                    <i class='bx bx-plus mr-1'></i> Add Single
+                </button>
+            </div>
+
+            <!-- Tab Panels -->
             <div class="space-y-6">
-                <form id="questionForm" class="space-y-4">
-                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50">
-                        <div class="flex items-center justify-between mb-2">
-                            <div>
-                                <p class="text-sm font-semibold text-gray-800">Upload .md/.txt File (Group <?php echo $adminGroup; ?>)</p>
-                                <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                <!-- Import MD/TXT -->
+                <div id="tab-md" class="qm-tab">
+                    <form id="questionForm" class="space-y-4">
+                        <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50">
+                            <div class="flex items-center justify-between mb-2">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Upload .md/.txt File (Group <?php echo $adminGroup; ?>)</p>
+                                    <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
+                                </div>
+                                <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                    <i class='bx bx-download'></i> Download MD sample
+                                </a>
                             </div>
-                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
-                                <i class='bx bx-download'></i> Download MD sample
-                            </a>
+                            <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                                <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                                <span class="text-sm font-semibold text-gray-700">Choose Markdown/Text File</span>
+                                <input type="file" id="questionFile" accept=".md,.txt" class="hidden">
+                            </label>
+                            <p id="questionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
                         </div>
-                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
-                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
-                            <span class="text-sm font-semibold text-gray-700">Choose Markdown/Text File</span>
-                            <input type="file" id="questionFile" accept=".md,.txt" class="hidden">
-                        </label>
-                        <p id="questionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
-                    </div>
-                    <button type="button" id="importQuestions" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Import Questions (MD/TXT)</button>
-
-                    <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50">
-                        <div class="flex items-center justify-between mb-2">
-                            <div>
-                                <p class="text-sm font-semibold text-gray-800">Upload .csv File (Group <?php echo $adminGroup; ?>)</p>
-                                <p class="text-xs text-gray-500">Headers: Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer</p>
-                            </div>
-                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
-                                <i class='bx bx-download'></i> Download CSV sample
-                            </a>
-                        </div>
-                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
-                            <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
-                            <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
-                            <input type="file" id="questionCsvFile" accept=".csv" class="hidden">
-                        </label>
-                        <p id="questionCsvFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
-                    </div>
-                    <button type="button" id="importQuestionsCsv" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Import Questions (CSV)</button>
-
-                    <div class="border-2 border-dashed border-red-200 rounded-xl p-4 bg-red-50/50">
-                        <p class="text-sm font-semibold text-gray-800 mb-1">Delete Questions by File</p>
-                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-red-200 hover:border-red-400 cursor-pointer shadow-sm">
-                            <i class='bx bx-trash text-xl text-red-600 mr-2'></i>
-                            <span class="text-sm font-semibold text-gray-700">Choose File to Delete</span>
-                            <input type="file" id="deleteQuestionFile" accept=".md,.txt,.csv" class="hidden">
-                        </label>
-                        <p id="deleteQuestionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
-                    </div>
-                    <button type="button" id="deleteQuestions" class="ui-btn w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 px-6 rounded-lg">Delete Matching Questions</button>
-                </form>
-
-                <div class="border-t mt-6 pt-6">
-                    <h4 class="font-semibold mb-3">Add Single Question</h4>
-                    <form id="addQuestionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="md:col-span-2">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Prompt</label>
-                            <textarea id="qPrompt" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" rows="3" placeholder="Enter question text"></textarea>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Option A</label>
-                            <input id="qA" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Option B</label>
-                            <input id="qB" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Option C</label>
-                            <input id="qC" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Option D</label>
-                            <input id="qD" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Correct Option</label>
-                            <select id="qAnswer" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200">
-                                <option value="A">A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                                <option value="D">D</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Category (optional)</label>
-                            <input id="qCategory" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" placeholder="e.g., General" />
-                        </div>
-                        <div class="md:col-span-2">
-                            <button type="button" id="addQuestionBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Add Question</button>
-                        </div>
+                        <button type="button" id="importQuestions" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Import Questions (MD/TXT)</button>
                     </form>
+                </div>
+
+                <!-- Import CSV -->
+                <div id="tab-csv" class="qm-tab hidden">
+                    <form class="space-y-4">
+                        <div class="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/50">
+                            <div class="flex items-center justify-between mb-2">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Upload .csv File (Group <?php echo $adminGroup; ?>)</p>
+                                    <p class="text-xs text-gray-500">Headers: Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer</p>
+                                </div>
+                                <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                                    <i class='bx bx-download'></i> Download CSV sample
+                                </a>
+                            </div>
+                            <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 cursor-pointer shadow-sm">
+                                <i class='bx bx-upload text-xl text-blue-600 mr-2'></i>
+                                <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
+                                <input type="file" id="questionCsvFile" accept=".csv" class="hidden">
+                            </label>
+                            <p id="questionCsvFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                        </div>
+                        <button type="button" id="importQuestionsCsv" class="ui-btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Import Questions (CSV)</button>
+                    </form>
+                </div>
+
+                <!-- Delete Questions -->
+                <div id="tab-delete" class="qm-tab hidden">
+                    <form class="space-y-4">
+                        <div class="border-2 border-dashed border-red-200 rounded-xl p-4 bg-red-50/50">
+                            <p class="text-sm font-semibold text-gray-800 mb-1">Delete Questions by File</p>
+                            <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-red-200 hover:border-red-400 cursor-pointer shadow-sm">
+                                <i class='bx bx-trash text-xl text-red-600 mr-2'></i>
+                                <span class="text-sm font-semibold text-gray-700">Choose File to Delete</span>
+                                <input type="file" id="deleteQuestionFile" accept=".md,.txt,.csv" class="hidden">
+                            </label>
+                            <p id="deleteQuestionFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                        </div>
+                        <button type="button" id="deleteQuestions" class="ui-btn w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 px-6 rounded-lg">Delete Matching Questions</button>
+                    </form>
+                </div>
+
+                <!-- Add Single Question -->
+                <div id="tab-add" class="qm-tab hidden">
+                    <div class="border-t pt-4">
+                        <h4 class="font-semibold mb-3">Add Single Question</h4>
+                        <form id="addQuestionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Prompt</label>
+                                <textarea id="qPrompt" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" rows="3" placeholder="Enter question text"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Option A</label>
+                                <input id="qA" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Option B</label>
+                                <input id="qB" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Option C</label>
+                                <input id="qC" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Option D</label>
+                                <input id="qD" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Correct Option</label>
+                                <select id="qAnswer" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200">
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Category (optional)</label>
+                                <input id="qCategory" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" placeholder="e.g., General" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <button type="button" id="addQuestionBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 px-6 rounded-lg">Add Question</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
-
+    </div>
     <!-- Student Management Modal -->
     <div id="studentModal" class="modal fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center z-50 overflow-y-auto">
         <div class="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-lg relative max-h-[90vh] overflow-y-auto">
@@ -565,45 +599,61 @@ $stats = $statsStmt->fetch();
             <div class="flex items-center justify-between mb-4 pr-24">
                 <h3 class="text-xl font-bold">Student Management</h3>
             </div>
-            <div class="space-y-6">
-                <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Name</label>
-                        <input id="sName" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Matric / Identifier</label>
-                        <input id="sId" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Phone (optional)</label>
-                        <input id="sPhone" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
-                    </div>
-                    <div class="md:col-span-3">
-                        <button type="button" id="addStudentBtn" class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg">Add Student</button>
-                    </div>
-                </form>
+            <!-- Tabs -->
+            <div class="mb-4 flex flex-wrap gap-2">
+                <button type="button" class="stud-tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold bg-green-600 text-white" data-tab="stud-tab-add">
+                    <i class='bx bx-user-plus mr-1'></i> Add Single
+                </button>
+                <button type="button" class="stud-tab-btn px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold" data-tab="stud-tab-import">
+                    <i class='bx bx-table mr-1'></i> Import CSV/TXT
+                </button>
+            </div>
 
-                <form id="studentForm" class="space-y-4">
-                    <div class="border-2 border-dashed border-green-200 rounded-xl p-4 bg-green-50/50">
-                        <div class="flex items-center justify-between mb-2">
-                            <div>
-                                <p class="text-sm font-semibold text-gray-800">Upload CSV File</p>
-                                <p class="text-xs text-gray-500">Format: Name, Matric/ID, Phone (CSV with headers)</p>
-                            </div>
-                            <a href="/Quiz-App/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
-                                <i class='bx bx-download'></i> Download sample
-                            </a>
+            <div class="space-y-6">
+                <!-- Add Single Student -->
+                <div id="stud-tab-add" class="stud-tab">
+                    <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Name</label>
+                            <input id="sName" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
                         </div>
-                        <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-green-200 hover:border-green-400 cursor-pointer shadow-sm">
-                            <i class='bx bx-upload text-xl text-green-600 mr-2'></i>
-                            <span class="text-sm font-semibold text-gray-700">Choose CSV File</span>
-                            <input type="file" id="studentFile" accept=".csv,.txt" class="hidden">
-                        </label>
-                        <p id="studentFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
-                    </div>
-                    <button type="button" id="importStudents" class="ui-btn w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg">Import Students</button>
-                </form>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Matric / Identifier</label>
+                            <input id="sId" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Phone (optional)</label>
+                            <input id="sPhone" class="w-full px-4 py-3 rounded-lg border-2 border-gray-200" />
+                        </div>
+                        <div class="md:col-span-3">
+                            <button type="button" id="addStudentBtn" class="w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg">Add Student</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Import CSV/TXT -->
+                <div id="stud-tab-import" class="stud-tab hidden">
+                    <form id="studentForm" class="space-y-4">
+                        <div class="border-2 border-dashed border-green-200 rounded-xl p-4 bg-green-50/50">
+                            <div class="flex items-center justify-between mb-2">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Upload CSV/TXT File</p>
+                                    <p class="text-xs text-gray-500">Format: Name, Matric/ID, Phone (CSV with headers)</p>
+                                </div>
+                                <a href="/Quiz-App/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
+                                    <i class='bx bx-download'></i> Download sample
+                                </a>
+                            </div>
+                            <label class="flex items-center justify-center px-4 py-3 bg-white rounded-lg border border-green-200 hover:border-green-400 cursor-pointer shadow-sm">
+                                <i class='bx bx-upload text-xl text-green-600 mr-2'></i>
+                                <span class="text-sm font-semibold text-gray-700">Choose CSV/TXT File</span>
+                                <input type="file" id="studentFile" accept=".csv,.txt" class="hidden">
+                            </label>
+                            <p id="studentFileName" class="text-xs text-gray-600 mt-2">No file chosen</p>
+                        </div>
+                        <button type="button" id="importStudents" class="ui-btn w-full bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-3 px-6 rounded-lg">Import Students</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -668,6 +718,61 @@ $stats = $statsStmt->fetch();
         document.getElementById('openQuestionModal').addEventListener('click', () => openModal('questionModal'));
         document.getElementById('openStudentModal').addEventListener('click', () => openModal('studentModal'));
         document.getElementById('openConfigModal').addEventListener('click', () => openModal('configModal'));
+
+        // Question modal tabs
+        function initQuestionTabs() {
+            const buttons = Array.from(document.querySelectorAll('#questionModal .tab-btn'));
+            const panels = new Map();
+            buttons.forEach(btn => {
+                const tabId = btn.getAttribute('data-tab');
+                const panel = document.getElementById(tabId);
+                if (panel) panels.set(tabId, panel);
+                btn.addEventListener('click', () => {
+                    // Toggle active button styles
+                    buttons.forEach(b => b.classList.remove('bg-purple-600','text-white'));
+                    btn.classList.add('bg-purple-600','text-white');
+                    // Show selected panel, hide others
+                    panels.forEach((el, id) => {
+                        if (id === tabId) {
+                            el.classList.remove('hidden');
+                        } else {
+                            el.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+            // Default to first tab
+            if (buttons.length) buttons[0].click();
+        }
+        // Initialize tabs once DOM is ready
+        document.addEventListener('DOMContentLoaded', initQuestionTabs);
+        // In case script loads after DOMContentLoaded, call directly
+        initQuestionTabs();
+
+        // Student modal tabs
+        function initStudentTabs() {
+            const buttons = Array.from(document.querySelectorAll('#studentModal .stud-tab-btn'));
+            const panels = new Map();
+            buttons.forEach(btn => {
+                const tabId = btn.getAttribute('data-tab');
+                const panel = document.getElementById(tabId);
+                if (panel) panels.set(tabId, panel);
+                btn.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('bg-green-600','text-white'));
+                    btn.classList.add('bg-green-600','text-white');
+                    panels.forEach((el, id) => {
+                        if (id === tabId) {
+                            el.classList.remove('hidden');
+                        } else {
+                            el.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+            if (buttons.length) buttons[0].click();
+        }
+        document.addEventListener('DOMContentLoaded', initStudentTabs);
+        initStudentTabs();
 
         // Close modal when clicking backdrop
         document.querySelectorAll('.modal').forEach(m => {

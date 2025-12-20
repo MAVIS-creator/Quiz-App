@@ -208,6 +208,14 @@ if ($studentFilter) {
                         <i class='bx bx-camera text-xl mr-2'></i>
                         Load Snapshot
                     </button>
+                    <button 
+                        type="button" 
+                        id="requestAudio"
+                        class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold rounded-lg hover:from-blue-700 hover:to-blue-900 transition flex items-center"
+                    >
+                        <i class='bx bx-microphone text-xl mr-2'></i>
+                        Request Audio
+                    </button>
                 </div>
                 <div class="mt-2">
                     <label class="flex items-center text-sm text-gray-600">
@@ -220,6 +228,12 @@ if ($studentFilter) {
             <div id="snapResult" class="text-center text-gray-500 py-8">
                 <i class='bx bx-image-alt text-6xl mb-4'></i>
                 <p>Enter a student ID and click "Load Snapshot" to view</p>
+            </div>
+
+            <!-- Violation Snapshots Gallery -->
+            <div id="violationGallery" class="mt-6 hidden">
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class='bx bx-photo-album text-xl mr-2 text-red-600'></i>Violation Snapshots</h3>
+                <div id="violationItems" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
             </div>
         </div>
 
@@ -280,13 +294,15 @@ if ($studentFilter) {
             }
 
             try {
-                const res = await fetch(API+'/snapshot.php?identifier='+encodeURIComponent(id));
+                // Load latest preview snapshot
+                const res = await fetch(API+'/snapshot.php?identifier='+encodeURIComponent(id)+'&type=preview');
                 const data = await res.json();
                 
                 if (data.filename && data.url) {
                     document.getElementById('snapResult').innerHTML = `
                         <div class="rounded-lg overflow-hidden inline-block shadow-lg">
-                            <img src="${data.url}" class="max-w-2xl max-h-96 object-contain" alt="Student Snapshot">
+                            <img src="${data.url}" class="max-w-2xl max-h-96 object-contain" alt="Student Snapshot"
+                                 onerror="this.onerror=null; document.getElementById('snapResult').innerHTML = '<div class=\'text-center py-8\'><i class=\'bx bx-image-alt text-6xl text-gray-400 mb-4\'></i><p class=\'text-gray-600\'>Snapshot failed to load. Please verify uploads path/filename.</p></div>';">
                             <div class="bg-gray-100 px-4 py-2 text-sm text-gray-600 flex items-center justify-center">
                                 <i class='bx bx-time mr-2'></i>
                                 ${data.timestamp || 'N/A'}
@@ -300,6 +316,25 @@ if ($studentFilter) {
                             <p class="text-gray-600">No snapshot available for this student</p>
                         </div>
                     `;
+                }
+
+                // Load recent violation snapshots (limit 6)
+                const violRes = await fetch(API + '/snapshot.php?identifier='+encodeURIComponent(id)+'&type=violation&limit=6');
+                const violData = await violRes.json();
+                const items = (violData.items || []);
+                const gallery = document.getElementById('violationGallery');
+                const grid = document.getElementById('violationItems');
+                if (items.length > 0) {
+                    gallery.classList.remove('hidden');
+                    grid.innerHTML = items.map(it => `
+                        <div class="border rounded-lg overflow-hidden bg-white">
+                            <img src="${it.url}" class="w-full h-40 object-cover" alt="Violation Snapshot">
+                            <div class="px-2 py-1 text-xs text-gray-600 flex items-center"><i class='bx bx-time mr-1'></i>${it.timestamp || ''}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    gallery.classList.add('hidden');
+                    grid.innerHTML = '';
                 }
             } catch (error) {
                 Swal.fire({
@@ -322,6 +357,30 @@ if ($studentFilter) {
                     clearInterval(refreshInterval);
                     refreshInterval = null;
                 }
+            }
+        };
+
+        // Request audio from student (sends a command via messages API)
+        document.getElementById('requestAudio').onclick = async () => {
+            const id = document.getElementById('snapId').value.trim();
+            if (!id) {
+                Swal.fire({ icon: 'warning', title: 'Missing ID', text: 'Please enter a student ID' });
+                return;
+            }
+            try {
+                const response = await fetch(API + '/messages.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sender: 'admin', receiver: id, text: '[REQUEST_AUDIO] Please send an audio clip.' })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    Swal.fire({ icon: 'success', title: 'Request Sent', text: 'The student will upload an audio clip shortly.', timer: 2000, showConfirmButton: false });
+                } else {
+                    throw new Error(data.error || 'Failed');
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to send audio request.' });
             }
         };
 
