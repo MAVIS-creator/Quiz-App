@@ -25,3 +25,4 @@ firebase-errors.log*
 .vercel/
 .env.test
 quiz.db
+/uploads/
