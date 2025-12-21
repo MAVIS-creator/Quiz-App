@@ -803,13 +803,9 @@ foreach ($questionIds as $qid) {
         // Initialize PeerJS connection for live video streaming
         function initPeerConnection() {
             try {
-                // Create peer with student identifier as ID (official PeerJS cloud)
-                peer = new Peer('student_' + identifier, {
-                    host: '0.peerjs.com',
-                    secure: true,
-                    port: 443,
-                    path: '/'
-                });
+                // Create peer with default PeerJS cloud (most reliable)
+                // PeerJS automatically connects to their cloud server
+                peer = new Peer('student_' + identifier);
                 
                 peer.on('open', (id) => {
                     console.log('PeerJS connected with ID:', id);

@@ -31,3 +31,5 @@ composer.lock
 test_proctoring.html
 test_submit.html
 test_peerjs_video.html
+test_peerjs_servers.html
+/scripts/

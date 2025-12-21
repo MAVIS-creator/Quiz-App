@@ -443,12 +443,8 @@ if ($studentFilter) {
         // Initialize PeerJS
         function initPeerJS() {
             try {
-                peer = new Peer('proctor_' + Date.now(), {
-                    host: '0.peerjs.com',
-                    secure: true,
-                    port: 443,
-                    path: '/'
-                });
+                // Use default PeerJS cloud (most reliable)
+                peer = new Peer('proctor_' + Date.now());
                 
                 peer.on('open', (id) => {
                     console.log('Proctor PeerJS connected:', id);
