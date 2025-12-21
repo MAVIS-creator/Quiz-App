@@ -51,7 +51,7 @@ if ($existingSession) {
         </script></body></html>";
         exit;
     }
-    
+
     // Check if booted or cancelled by admin
     if (in_array($existingSession['status'], ['booted', 'cancelled'])) {
         echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
@@ -68,16 +68,16 @@ if ($existingSession) {
         </script></body></html>";
         exit;
     }
-    
+
     // Resume existing session (not submitted, not cancelled/booted)
     $sessionId = $existingSession['session_id'];
     $timeAdjustment = $existingSession['time_adjustment_seconds'] ?? 0;
-    
+
     // Calculate elapsed time since session creation
     $sessionStart = new DateTime($existingSession['created_at']);
     $now = new DateTime();
     $elapsedSeconds = $now->getTimestamp() - $sessionStart->getTimestamp();
-    
+
     $isResuming = true;
 } else {
     // Create new session ID for first-time attempt today
@@ -109,18 +109,34 @@ $shuffleStmt->execute([$studentMatric, $studentGroup]);
 $shuffledData = $shuffleStmt->fetch();
 
 if (!$shuffledData) {
-    // Generate new shuffled order
+    // Generate new shuffled order (respect current configured question count)
     $qsStmt = $pdo->prepare('SELECT id FROM questions WHERE `group` = ? ORDER BY id');
     $qsStmt->execute([$studentGroup]);
     $allQs = $qsStmt->fetchAll(PDO::FETCH_COLUMN);
+    $count = min($count, count($allQs));
     shuffle($allQs);
     $selectedIds = array_slice($allQs, 0, $count);
-    
+
     $insertShuffle = $pdo->prepare('INSERT INTO student_questions (identifier, group_id, question_ids_order) VALUES (?, ?, ?)');
     $insertShuffle->execute([$studentMatric, $studentGroup, json_encode($selectedIds)]);
     $questionIds = $selectedIds;
 } else {
-    $questionIds = json_decode($shuffledData['question_ids_order'], true);
+    $questionIds = json_decode($shuffledData['question_ids_order'], true) ?: [];
+    $storedCount = count($questionIds);
+
+    // If the configured question count changed, regenerate the shuffled list
+    if ($storedCount !== $count) {
+        $qsStmt = $pdo->prepare('SELECT id FROM questions WHERE `group` = ? ORDER BY id');
+        $qsStmt->execute([$studentGroup]);
+        $allQs = $qsStmt->fetchAll(PDO::FETCH_COLUMN);
+        $count = min($count, count($allQs));
+        shuffle($allQs);
+        $selectedIds = array_slice($allQs, 0, $count);
+
+        $updateShuffle = $pdo->prepare('UPDATE student_questions SET question_ids_order = ? WHERE identifier = ? AND group_id = ?');
+        $updateShuffle->execute([json_encode($selectedIds), $studentMatric, $studentGroup]);
+        $questionIds = $selectedIds;
+    }
 }
 
 // Fetch questions in shuffled order
@@ -134,6 +150,7 @@ foreach ($questionIds as $qid) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -143,18 +160,37 @@ foreach ($questionIds as $qid) {
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .gradient-bg {
@@ -162,8 +198,15 @@ foreach ($questionIds as $qid) {
         }
 
         @keyframes gradientShift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
         }
 
         .gradient-text {
@@ -204,20 +247,14 @@ foreach ($questionIds as $qid) {
 
         /* Question Navigator */
         .question-navigator {
-            position: fixed;
-            right: 20px;
-            top: 150px;
+            position: relative;
             background: white;
             border-radius: 1rem;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             padding: 1rem;
-            z-index: 40;
+            z-index: 10;
             max-height: calc(100vh - 200px);
             overflow-y: auto;
-            display: none;
-        }
-
-        .question-navigator.active {
             display: block;
         }
 
@@ -282,18 +319,18 @@ foreach ($questionIds as $qid) {
         }
 
         @keyframes pulse {
-            0%, 100% {
+
+            0%,
+            100% {
                 box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
             }
+
             50% {
                 box-shadow: 0 0 20px rgba(124, 58, 237, 0.8);
             }
         }
 
         @media (max-width: 768px) {
-            .question-navigator {
-                display: none !important;
-            }
             .question-card {
                 margin-bottom: 1rem;
             }
@@ -304,18 +341,17 @@ foreach ($questionIds as $qid) {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
+
+        @media (min-width: 1024px) {
+            .question-navigator {
+                position: sticky;
+                top: 110px;
+            }
+        }
     </style>
 </head>
-<body class="bg-gradient-to-br from-purple-50 via-white to-blue-50 min-h-screen">
-    <!-- Question Navigator Panel -->
-    <div id="questionNavigator" class="question-navigator active">
-        <div class="navigator-title">
-            <span>Questions</span>
-            <button onclick="toggleNavigator()" class="text-gray-500 hover:text-gray-700 text-lg">×</button>
-        </div>
-        <div class="nav-buttons-grid" id="navigatorButtons"></div>
-    </div>
 
+<body class="bg-gradient-to-br from-purple-50 via-white to-blue-50 min-h-screen">
     <!-- Header with Timer -->
     <div class="gradient-bg text-white shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4">
@@ -326,7 +362,7 @@ foreach ($questionIds as $qid) {
                         HTML & CSS Quiz
                     </h1>
                     <p class="text-sm opacity-90 mt-1">
-                        <i class='bx bx-user mr-1'></i><?php echo htmlspecialchars($studentName); ?> 
+                        <i class='bx bx-user mr-1'></i><?php echo htmlspecialchars($studentName); ?>
                         <span class="ml-2"><?php echo htmlspecialchars($studentMatric); ?></span>
                     </p>
                 </div>
@@ -381,44 +417,52 @@ foreach ($questionIds as $qid) {
             </div>
         </div>
 
-        <!-- Questions -->
-        <div id="questionsContainer" class="space-y-6">
-            <?php foreach ($questions as $idx => $q): ?>
-            <div class="question-card bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500" data-qid="<?php echo $q['id']; ?>">
-                <div class="flex items-start justify-between mb-4">
-                    <div class="flex-1">
-                        <div class="flex items-center mb-2">
-                            <span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-semibold mr-3">
-                                Q<?php echo ($idx + 1); ?>
-                            </span>
-                            <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                <?php echo htmlspecialchars($q['category']); ?>
-                            </span>
-                        </div>
-                        <p class="text-lg font-medium text-gray-800 leading-relaxed">
-                            <?php echo htmlspecialchars($q['prompt']); ?>
-                        </p>
-                    </div>
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
+            <div id="questionNavigator" class="question-navigator w-full lg:w-56">
+                <div class="navigator-title">
+                    <span>Questions</span>
                 </div>
-
-                <div class="space-y-3 mt-4">
-                    <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
-                    <label class="flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all duration-200 group">
-                        <input 
-                            type="radio" 
-                            name="q<?php echo $q['id']; ?>" 
-                            value="<?php echo strtoupper($opt); ?>"
-                            class="mt-1 w-4 h-4 text-purple-600 focus:ring-purple-500"
-                            onchange="updateProgress(<?php echo $q['id']; ?>)"
-                        >
-                        <span class="ml-3 text-gray-700 group-hover:text-gray-900 flex-1">
-                            <?php echo htmlspecialchars($q["option_$opt"]); ?>
-                        </span>
-                    </label>
-                    <?php endforeach; ?>
-                </div>
+                <div class="nav-buttons-grid" id="navigatorButtons"></div>
             </div>
-            <?php endforeach; ?>
+
+            <!-- Questions -->
+            <div id="questionsContainer" class="flex-1 space-y-6">
+                <?php foreach ($questions as $idx => $q): ?>
+                    <div class="question-card bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500" data-qid="<?php echo $q['id']; ?>">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-semibold mr-3">
+                                        Q<?php echo ($idx + 1); ?>
+                                    </span>
+                                    <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                        <?php echo htmlspecialchars($q['category']); ?>
+                                    </span>
+                                </div>
+                                <p class="text-lg font-medium text-gray-800 leading-relaxed">
+                                    <?php echo htmlspecialchars($q['prompt']); ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 mt-4">
+                            <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
+                                <label class="flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all duration-200 group">
+                                    <input
+                                        type="radio"
+                                        name="q<?php echo $q['id']; ?>"
+                                        value="<?php echo strtoupper($opt); ?>"
+                                        class="mt-1 w-4 h-4 text-purple-600 focus:ring-purple-500"
+                                        onchange="updateProgress(<?php echo $q['id']; ?>)">
+                                    <span class="ml-3 text-gray-700 group-hover:text-gray-900 flex-1">
+                                        <?php echo htmlspecialchars($q["option_$opt"]); ?>
+                                    </span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
 
         <div class="mt-8 text-center">
@@ -439,7 +483,7 @@ foreach ($questionIds as $qid) {
     </footer>
 
     <!-- Hidden camera element -->
-    <video id="camera" style="display:none;" autoplay></video>
+    <video id="camera" style="opacity: 0; position: absolute; pointer-events: none;" autoplay playsinline></video>
     <canvas id="snapshot" style="display:none;"></canvas>
 
     <script>
@@ -450,7 +494,8 @@ foreach ($questionIds as $qid) {
         const totalQuestions = <?php echo count($questions); ?>;
         const questionIds = <?php echo json_encode(array_column($questions, 'id')); ?>;
         const sessionId = '<?php echo $_SESSION['quiz_session_id']; ?>';
-        
+        const examMinutesConfig = <?php echo (int)$examMin; ?>;
+
         let timeLeft = <?php echo $totalSeconds; ?>;
         let appliedAdjustment = <?php echo (int)($timeAdjustment ?? 0); ?>;
         let answeredQuestions = new Set();
@@ -465,7 +510,7 @@ foreach ($questionIds as $qid) {
         let mediaRecorder = null;
         let audioChunks = [];
         let isResuming = <?php echo $isResuming ? 'true' : 'false'; ?>;
-        
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             // Show resumption notification if applicable
@@ -480,7 +525,10 @@ foreach ($questionIds as $qid) {
                     position: 'top-end'
                 });
             }
-            
+
+            if (!isResuming) {
+                ensureSessionRecord();
+            }
             loadSavedAnswers(); // Load previous answers first
             initCamera();
             initAudioMonitoring();
@@ -490,21 +538,52 @@ foreach ($questionIds as $qid) {
             monitorTabSwitches();
             pollStatusAdjustments();
         });
-        
+
+        // Ensure a session record exists immediately (so created_at tracks real start time)
+        async function ensureSessionRecord() {
+            if (isResuming) return; // do not overwrite saved answers when resuming
+            try {
+                await fetch(`${API}/sessions.php`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        session_id: sessionId,
+                        name: studentName,
+                        answers: answers,
+                        timings: timings,
+                        question_ids: questionIds,
+                        examMinutes: examMinutesConfig,
+                        group: studentGroup
+                    })
+                });
+            } catch (e) {
+                console.error('Initial session save failed:', e);
+            }
+        }
+
+        function renderTimer() {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            document.getElementById('minutes').textContent = mins;
+            document.getElementById('seconds').textContent = secs.toString().padStart(2, '0');
+        }
+
         // Timer
         function startTimer() {
-            setInterval(function() {
+            renderTimer();
+            const timerInterval = setInterval(function() {
                 if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
                     submitQuiz(true);
                     return;
                 }
-                
+
                 timeLeft--;
-                const mins = Math.floor(timeLeft / 60);
-                const secs = timeLeft % 60;
-                document.getElementById('minutes').textContent = mins;
-                document.getElementById('seconds').textContent = secs.toString().padStart(2, '0');
-                
+                renderTimer();
+
                 // Warning when 5 minutes left
                 if (timeLeft === 300) {
                     Swal.fire({
@@ -518,7 +597,7 @@ foreach ($questionIds as $qid) {
                 }
             }, 1000);
         }
-        
+
         // Load saved answers from server
         async function loadSavedAnswers() {
             try {
@@ -527,11 +606,11 @@ foreach ($questionIds as $qid) {
                 const mySession = sessions
                     .filter(s => s.identifier === identifier && Number(s.group) === studentGroup)
                     .sort((a, b) => new Date(b.last_saved || b.created_at || 0) - new Date(a.last_saved || a.created_at || 0))[0];
-                
+
                 if (mySession && mySession.answers_json) {
                     const savedAnswers = JSON.parse(mySession.answers_json);
                     const savedTimings = mySession.timings_json ? JSON.parse(mySession.timings_json) : {};
-                    
+
                     // Restore answers
                     Object.keys(savedAnswers).forEach(qid => {
                         const answerValue = savedAnswers[qid];
@@ -542,10 +621,10 @@ foreach ($questionIds as $qid) {
                             answeredQuestions.add(parseInt(qid));
                         }
                     });
-                    
+
                     // Restore timings
                     Object.assign(timings, savedTimings);
-                    
+
                     // Update progress display
                     document.getElementById('answeredCount').textContent = answeredQuestions.size;
                 }
@@ -553,7 +632,7 @@ foreach ($questionIds as $qid) {
                 console.error('Failed to load saved answers:', e);
             }
         }
-        
+
         // Update progress
         function updateProgress(qid) {
             answeredQuestions.add(qid);
@@ -564,7 +643,7 @@ foreach ($questionIds as $qid) {
             }
             document.getElementById('answeredCount').textContent = answeredQuestions.size;
         }
-        
+
         // Auto-save every 5 seconds
         function autoSave() {
             setInterval(async function() {
@@ -572,7 +651,9 @@ foreach ($questionIds as $qid) {
                     try {
                         await fetch(`${API}/sessions.php`, {
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
                             body: JSON.stringify({
                                 identifier: identifier,
                                 session_id: sessionId,
@@ -580,6 +661,7 @@ foreach ($questionIds as $qid) {
                                 answers: answers,
                                 timings: timings,
                                 question_ids: questionIds,
+                                examMinutes: examMinutesConfig,
                                 group: studentGroup
                             })
                         });
@@ -604,22 +686,35 @@ foreach ($questionIds as $qid) {
                     // Handle mid-exam termination
                     const status = String(latest.status || '').toLowerCase();
                     if (status === 'booted' || status === 'cancelled') {
-                        if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+                        if (cameraStream) {
+                            cameraStream.getTracks().forEach(t => t.stop());
+                        }
                         Swal.fire({
                             icon: 'error',
                             title: status === 'booted' ? 'Exam Terminated' : 'Exam Cancelled',
                             text: 'You have been removed from the exam by the administrator.',
                             confirmButtonColor: '#dc2626',
                             allowOutsideClick: false
-                        }).then(() => { window.location.href = 'login.php'; });
+                        }).then(() => {
+                            window.location.href = 'login.php';
+                        });
                         return;
                     }
 
                     // If submitted elsewhere, finish here
                     if (Number(latest.submitted) === 1) {
-                        if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
-                        Swal.fire({ icon: 'success', title: 'Quiz Submitted!', timer: 1500, showConfirmButton: false })
-                            .then(() => { window.location.href = 'result.php'; });
+                        if (cameraStream) {
+                            cameraStream.getTracks().forEach(t => t.stop());
+                        }
+                        Swal.fire({
+                                icon: 'success',
+                                title: 'Quiz Submitted!',
+                                timer: 1500,
+                                showConfirmButton: false
+                            })
+                            .then(() => {
+                                window.location.href = 'result.php';
+                            });
                         return;
                     }
 
@@ -649,7 +744,9 @@ foreach ($questionIds as $qid) {
                             badge.classList.toggle('border-indigo-200', added);
                             badge.classList.toggle('border-red-200', !added);
                             // Hide after a short while
-                            setTimeout(() => { badge.classList.add('hidden'); }, 6000);
+                            setTimeout(() => {
+                                badge.classList.add('hidden');
+                            }, 6000);
                         }
                     }
                 } catch (e) {
@@ -657,27 +754,30 @@ foreach ($questionIds as $qid) {
                 }
             }, 5000);
         }
-        
+
         // Camera monitoring
         async function initCamera() {
             try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
                 const video = document.getElementById('camera');
                 video.srcObject = cameraStream;
                 video.muted = true; // MUTE video element so audio doesn't play
-                
+
                 // Start background audio recording
                 startBackgroundRecording();
-                
+
                 // Smart snapshot - only when multiple faces detected
                 setInterval(checkForMultipleFaces, 3000);
             } catch (e) {
                 console.warn('Camera access denied:', e);
-                document.getElementById('cameraStatus').innerHTML = 
+                document.getElementById('cameraStatus').innerHTML =
                     '<i class="bx bx-video-off mr-1"></i><span class="text-red-600">Camera Disabled</span>';
             }
         }
-        
+
         // Background audio recording
         function startBackgroundRecording() {
             try {
@@ -686,29 +786,31 @@ foreach ($questionIds as $qid) {
                 mediaRecorder = new MediaRecorder(audioStream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
-                
+
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
                         audioChunks.push(event.data);
                     }
                 };
-                
+
                 mediaRecorder.onstop = async () => {
                     if (audioChunks.length > 0) {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const audioBlob = new Blob(audioChunks, {
+                            type: 'audio/webm'
+                        });
                         await uploadAudioClip(audioBlob);
                         audioChunks = [];
                     }
                 };
-                
+
                 // Start recording (will create 10-second clips)
                 mediaRecorder.start();
-                
+
             } catch (e) {
                 console.warn('Audio recording failed:', e);
             }
         }
-        
+
         // Upload audio clip to server
         async function uploadAudioClip(audioBlob) {
             try {
@@ -718,7 +820,9 @@ foreach ($questionIds as $qid) {
                     const duration = mediaRecorder ? Math.round(audioChunks.length * 10 / 1000) : 0; // Rough estimate
                     await fetch(`${API}/audio_save.php`, {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             identifier: identifier,
                             audio: base64Audio,
@@ -731,25 +835,27 @@ foreach ($questionIds as $qid) {
                 console.error('Audio upload failed:', e);
             }
         }
-        
+
         async function checkForMultipleFaces() {
             // This is a placeholder - in production, you'd use face-api.js or similar
             // For now, capture snapshot at intervals
             const canvas = document.getElementById('snapshot');
             const video = document.getElementById('camera');
             const ctx = canvas.getContext('2d');
-            
+
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
-            
+
             const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            
+
             // Send preview snapshot to server
             try {
                 await fetch(`${API}/snapshot.php`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         identifier: identifier,
                         image: dataUrl,
@@ -773,7 +879,9 @@ foreach ($questionIds as $qid) {
                 const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                 await fetch(`${API}/snapshot.php`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         identifier: identifier,
                         image: dataUrl,
@@ -784,21 +892,21 @@ foreach ($questionIds as $qid) {
                 console.error('Violation snapshot failed:', e);
             }
         }
-        
+
         // Audio monitoring
         function initAudioMonitoring() {
             if (!cameraStream) return;
-            
+
             try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext = new(window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(cameraStream);
                 audioAnalyser = audioContext.createAnalyser();
                 audioAnalyser.fftSize = 256;
                 source.connect(audioAnalyser);
-                
+
                 const dataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
                 let isRecordingLoudSound = false;
-                
+
                 setInterval(function() {
                     audioAnalyser.getByteFrequencyData(dataArray);
                     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
@@ -806,18 +914,23 @@ foreach ($questionIds as $qid) {
                     let severity = 0;
                     let levelLabel = '';
                     // Audio levels: medium (>90), high (>140)
-                    if (vol > 140) { severity = 3; levelLabel = 'high'; }
-                    else if (vol > 90) { severity = 2; levelLabel = 'medium'; }
+                    if (vol > 140) {
+                        severity = 3;
+                        levelLabel = 'high';
+                    } else if (vol > 90) {
+                        severity = 2;
+                        levelLabel = 'medium';
+                    }
 
                     if (severity > 0) {
                         logAudioDetection(vol, severity, levelLabel);
                         // Capture violation snapshot alongside audio violation
                         sendViolationSnapshot();
-                        
+
                         // Start recording 5-10 second clip when loud sound detected
                         if (!isRecordingLoudSound && mediaRecorder && mediaRecorder.state === 'recording') {
                             isRecordingLoudSound = true;
-                            
+
                             // Stop current recording after 5-10 seconds
                             setTimeout(() => {
                                 if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -839,12 +952,14 @@ foreach ($questionIds as $qid) {
                 console.warn('Audio monitoring failed:', e);
             }
         }
-        
+
         async function logAudioDetection(volume, severity = 2, levelLabel = 'medium') {
             try {
                 await fetch(`${API}/violations.php`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         identifier: identifier,
                         type: 'loud_audio',
@@ -856,7 +971,7 @@ foreach ($questionIds as $qid) {
                 console.error('Audio log failed:', e);
             }
         }
-        
+
         // Tab switch monitoring
         function monitorTabSwitches() {
             document.addEventListener('visibilitychange', function() {
@@ -865,7 +980,7 @@ foreach ($questionIds as $qid) {
                     if (now - lastTabSwitch < 5000) {
                         tabSwitchCount++;
                         logViolation('tab_switch', `Tab switched (count: ${tabSwitchCount})`);
-                        
+
                         if (tabSwitchCount >= 3) {
                             submitQuiz(true);
                         }
@@ -874,12 +989,14 @@ foreach ($questionIds as $qid) {
                 }
             });
         }
-        
+
         async function logViolation(type, message) {
             try {
                 await fetch(`${API}/violations.php`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         identifier: identifier,
                         type: type,
@@ -893,9 +1010,10 @@ foreach ($questionIds as $qid) {
                 console.error('Violation log failed:', e);
             }
         }
-        
+
         // Check for messages from admin
         let seenMessageKeys = new Set();
+
         function checkMessages() {
             setInterval(async function() {
                 try {
@@ -946,20 +1064,28 @@ foreach ($questionIds as $qid) {
             try {
                 if (!cameraStream) return;
                 const audioStream = new MediaStream(cameraStream.getAudioTracks());
-                const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm;codecs=opus' });
+                const recorder = new MediaRecorder(audioStream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
                 const chunks = [];
-                recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+                recorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) chunks.push(e.data);
+                };
                 recorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const blob = new Blob(chunks, {
+                        type: 'audio/webm'
+                    });
                     await uploadAudioClip(blob);
                 };
                 recorder.start();
-                setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 8000);
+                setTimeout(() => {
+                    if (recorder.state === 'recording') recorder.stop();
+                }, 8000);
             } catch (e) {
                 console.error('On-demand audio failed:', e);
             }
         }
-        
+
         function showMessageNotification(message) {
             const notification = document.getElementById('messageNotification');
             notification.className = 'message-notification bg-blue-500 text-white px-6 py-4 rounded-lg shadow-xl';
@@ -972,12 +1098,12 @@ foreach ($questionIds as $qid) {
                     </div>
                 </div>
             `;
-            
+
             setTimeout(() => {
                 notification.classList.add('hidden');
             }, 10000);
         }
-        
+
         // Submit quiz
         async function submitQuiz(autoSubmit = false) {
             if (!autoSubmit && answeredQuestions.size < totalQuestions) {
@@ -990,66 +1116,66 @@ foreach ($questionIds as $qid) {
                     cancelButtonText: 'Continue Quiz',
                     confirmButtonColor: '#7c3aed'
                 });
-                
+
                 if (!result.isConfirmed) return;
             }
-            
+
             try {
-                    // Final save with submission flag
-                    const submitPayload = {
-                        identifier: identifier,
-                        session_id: sessionId,
-                        name: studentName,
-                        answers: answers,
-                        timings: timings,
-                        question_ids: questionIds,
-                        submitted: true,
-                        group: studentGroup
-                    };
-                
-                    let response;
-                    let data;
-                    let retries = 3;
-                    let lastError;
-                
-                    // Retry logic for network resilience
-                    while (retries > 0) {
-                        try {
-                            const controller = new AbortController();
-                            const timeoutId = setTimeout(() => controller.abort(), 30000);
-                            
-                            response = await fetch(`${API}/sessions.php`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify(submitPayload),
-                                // Add timeout for ngrok
-                                signal: controller.signal
-                            });
-                        
-                            clearTimeout(timeoutId);
+                // Final save with submission flag
+                const submitPayload = {
+                    identifier: identifier,
+                    session_id: sessionId,
+                    name: studentName,
+                    answers: answers,
+                    timings: timings,
+                    question_ids: questionIds,
+                    submitted: true,
+                    group: studentGroup
+                };
+
+                let response;
+                let data;
+                let retries = 3;
+                let lastError;
+
+                // Retry logic for network resilience
+                while (retries > 0) {
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+                        response = await fetch(`${API}/sessions.php`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(submitPayload),
+                            // Add timeout for ngrok
+                            signal: controller.signal
+                        });
+
+                        clearTimeout(timeoutId);
                         data = await response.json();
-                            break; // Success, exit retry loop
-                        } catch (err) {
-                            lastError = err;
-                            retries--;
-                            if (retries > 0) {
-                                await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
-                            }
+                        break; // Success, exit retry loop
+                    } catch (err) {
+                        lastError = err;
+                        retries--;
+                        if (retries > 0) {
+                            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
                         }
                     }
-                
-                    if (retries === 0) {
-                        throw lastError || new Error('Failed to submit after 3 attempts');
-                    }
-                
-                    if (response.ok && (data.ok || data.success)) {
+                }
+
+                if (retries === 0) {
+                    throw lastError || new Error('Failed to submit after 3 attempts');
+                }
+
+                if (response.ok && (data.ok || data.success)) {
                     if (cameraStream) {
                         cameraStream.getTracks().forEach(track => track.stop());
                     }
-                    
+
                     Swal.fire({
                         icon: 'success',
                         title: 'Quiz Submitted!',
@@ -1091,7 +1217,10 @@ foreach ($questionIds as $qid) {
             const qId = questionIds[qNum - 1];
             const card = document.querySelector(`[data-qid="${qId}"]`);
             if (card) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                card.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
                 card.classList.add('highlight-pulse');
                 setTimeout(() => card.classList.remove('highlight-pulse'), 1000);
             }
@@ -1101,7 +1230,7 @@ foreach ($questionIds as $qid) {
             for (let i = 1; i <= totalQuestions; i++) {
                 const btn = document.getElementById(`navbtn-${i}`);
                 const qId = questionIds[i - 1];
-                
+
                 if (answeredQuestions.has(qId)) {
                     btn.className = 'nav-btn answered';
                 } else {
@@ -1128,4 +1257,5 @@ foreach ($questionIds as $qid) {
         });
     </script>
 </body>
+
 </html>
