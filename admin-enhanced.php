@@ -399,6 +399,14 @@ $stats = $statsStmt->fetch();
                             <td class="px-4 py-3 text-sm text-gray-600 js-last-saved">
                                 <?php echo isset($session['last_saved']) ? date('H:i', strtotime($session['last_saved'])) : date('H:i', strtotime($session['created_at'])); ?>
                             </td>
+                            <td class="hidden md:table-cell px-4 py-3">
+                                <!-- Desktop: right-click menu -->
+                            </td>
+                            <td class="table-cell md:hidden px-4 py-3">
+                                <button class="action-menu-btn px-2 py-1 rounded hover:bg-gray-200 text-gray-600" data-identifier="<?php echo htmlspecialchars($session['identifier'] ?? ''); ?>" title="Actions">
+                                    <i class='bx bx-dots-vertical text-xl'></i>
+                                </button>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -420,14 +428,19 @@ $stats = $statsStmt->fetch();
                             <div class="font-semibold text-gray-900"><?php echo htmlspecialchars($session['name']); ?></div>
                             <div class="text-xs text-gray-600"><?php echo htmlspecialchars($session['identifier']); ?></div>
                         </div>
-                        <div class="text-xs">
-                            <?php if ($session['submitted']): ?>
-                                <span class="badge badge-success"><i class='bx bx-check-circle'></i> Submitted</span>
-                            <?php elseif (($session['status'] ?? '') === 'booted'): ?>
-                                <span class="badge badge-danger"><i class='bx bx-x-circle'></i> Booted</span>
-                            <?php else: ?>
-                                <span class="badge badge-info"><i class='bx bx-hourglass'></i> In Progress</span>
-                            <?php endif; ?>
+                        <div class="flex items-center gap-2">
+                            <div class="text-xs flex-1">
+                                <?php if ($session['submitted']): ?>
+                                    <span class="badge badge-success"><i class='bx bx-check-circle'></i> Submitted</span>
+                                <?php elseif (($session['status'] ?? '') === 'booted'): ?>
+                                    <span class="badge badge-danger"><i class='bx bx-x-circle'></i> Booted</span>
+                                <?php else: ?>
+                                    <span class="badge badge-info"><i class='bx bx-hourglass'></i> In Progress</span>
+                                <?php endif; ?>
+                            </div>
+                            <button class="action-menu-btn px-1 py-1 rounded hover:bg-gray-200 text-gray-600 flex-shrink-0" data-identifier="<?php echo htmlspecialchars($session['identifier'] ?? ''); ?>" title="Actions">
+                                <i class='bx bx-dots-vertical text-xl'></i>
+                            </button>
                         </div>
                     </div>
                     <div class="mt-3">
@@ -1326,6 +1339,319 @@ $stats = $statsStmt->fetch();
                 Swal.fire('Error', 'Import failed: ' + err.message, 'error');
             }
         };
+
+        // Context menu for student rows
+        document.addEventListener('contextmenu', (e) => {
+            const row = e.target.closest('.table-row');
+            if (!row) return;
+            
+            e.preventDefault();
+            const identifier = row.getAttribute('data-identifier');
+            if (!identifier) return;
+            
+            showStudentMenu(identifier, e.clientX, e.clientY);
+        });
+
+        // Mobile action menu button
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.action-menu-btn');
+            if (!btn) return;
+            
+            const identifier = btn.getAttribute('data-identifier');
+            if (!identifier) return;
+            
+            const rect = btn.getBoundingClientRect();
+            showStudentMenu(identifier, rect.left, rect.bottom);
+        });
+
+        // Right-click menu for student actions
+        function showStudentMenu(identifier, x, y) {
+            const session = Array.from(document.querySelectorAll('.table-row')).find(r => r.getAttribute('data-identifier') === identifier);
+            if (!session) return;
+
+            const statusEl = session.querySelector('.js-status');
+            const isSubmitted = statusEl?.textContent?.includes('Submitted');
+            const accEl = session.querySelector('.js-accuracy');
+            const accuracy = accEl?.textContent ?? '-';
+
+            const menu = document.createElement('div');
+            menu.className = 'fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[1000] py-1 min-w-48';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            menu.innerHTML = `
+                <div class="px-3 py-2 border-b border-gray-100 text-xs font-bold text-gray-600">
+                    ${identifier}
+                </div>
+                <button class="mark-submitted-btn w-full text-left px-4 py-2 hover:bg-blue-50 text-sm font-medium text-blue-700 flex items-center gap-2 ${isSubmitted ? 'opacity-50 cursor-not-allowed' : ''}">
+                    <i class='bx bx-check'></i> Mark as Submitted
+                </button>
+                <button class="view-score-btn w-full text-left px-4 py-2 hover:bg-green-50 text-sm font-medium text-green-700 flex items-center gap-2">
+                    <i class='bx bx-show'></i> View Score (${accuracy})
+                </button>
+                <button class="mark-in-progress-btn w-full text-left px-4 py-2 hover:bg-yellow-50 text-sm font-medium text-yellow-700 flex items-center gap-2 ${!isSubmitted ? 'opacity-50 cursor-not-allowed' : ''}">
+                    <i class='bx bx-redo'></i> Undo (Mark In Progress)
+                </button>
+            `;
+
+            document.body.appendChild(menu);
+
+            // Mark as Submitted
+            menu.querySelector('.mark-submitted-btn').onclick = (e) => {
+                e.stopPropagation();
+                markStudentSubmitted(identifier);
+                menu.remove();
+            };
+
+            // View Score
+            menu.querySelector('.view-score-btn').onclick = (e) => {
+                e.stopPropagation();
+                viewStudentScore(identifier, accuracy);
+                menu.remove();
+            };
+
+            // Undo (Mark in Progress)
+            menu.querySelector('.mark-in-progress-btn').onclick = (e) => {
+                e.stopPropagation();
+                undoStudentSubmitted(identifier);
+                menu.remove();
+            };
+
+            // Click elsewhere to close menu
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target)) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 0);
+        }
+
+        // Mark student as submitted
+        async function markStudentSubmitted(identifier) {
+            const { value: reason } = await Swal.fire({
+                title: 'Mark as Submitted?',
+                input: 'textarea',
+                inputLabel: 'Reason for marking as submitted',
+                inputPlaceholder: 'e.g., Technical issue yesterday, allowing new quiz attempt...',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'Mark Submitted'
+            });
+
+            if (!reason) return;
+
+            try {
+                const res = await fetch(API + '/admin_actions.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        action_type: 'mark_submitted',
+                        reason: reason,
+                        admin_name: 'Admin'
+                    })
+                });
+
+                const data = await res.json();
+                if (data.ok || data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Marked as Submitted',
+                        text: `${identifier} can now start a new quiz`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    setTimeout(pollDashboard, 500);
+                } else {
+                    throw new Error(data.error || 'Failed');
+                }
+            } catch (err) {
+                Swal.fire({icon: 'error', title: 'Error', text: 'Failed: ' + err.message});
+            }
+        }
+
+        // View student score with detailed results
+        async function viewStudentScore(identifier, accuracy) {
+            const row = document.querySelector(`tr[data-identifier="${identifier}"]`);
+            const name = row?.querySelector('.font-medium')?.textContent || identifier;
+            
+            // Show loading
+            Swal.fire({
+                title: `Score: ${name}`,
+                html: '<div class="text-center"><i class="bx bx-loader-alt bx-spin text-4xl text-blue-600"></i><p class="mt-2">Loading detailed results...</p></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false
+            });
+
+            try {
+                // Fetch full session data
+                const sessRes = await fetch(API + '/sessions.php?identifier=' + encodeURIComponent(identifier));
+                const sessData = await sessRes.json();
+                
+                if (!Array.isArray(sessData) || sessData.length === 0) {
+                    throw new Error('Session not found');
+                }
+
+                const session = sessData[0];
+                const answers = JSON.parse(session.answers_json || '{}');
+                const questionIds = JSON.parse(session.question_ids_json || '[]');
+                const totalQuestions = questionIds.length;
+                
+                // Calculate scores from answers
+                let correctCount = 0;
+                const answeredCount = Object.keys(answers).filter(k => answers[k] !== null && answers[k] !== '').length;
+                
+                // Fetch questions to compare answers
+                if (totalQuestions > 0 && answeredCount > 0) {
+                    const placeholders = questionIds.map(() => '?').join(',');
+                    const qRes = await fetch(API + '/accuracy.php');
+                    const qData = await qRes.json();
+                    
+                    // Try to get correct count from accuracy data
+                    const studentData = qData.students?.find(s => s.identifier === identifier);
+                    if (studentData) {
+                        correctCount = studentData.correct_answers || 0;
+                    }
+                }
+                
+                const violCount = session.violations || 0;
+                const wrongCount = answeredCount - correctCount;
+                const skippedCount = totalQuestions - answeredCount;
+
+                // Get question details
+                let detailsHtml = `
+                    <div class="text-left space-y-4 max-h-[60vh] overflow-y-auto">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-blue-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-600">Accuracy</div>
+                                <div class="text-3xl font-bold text-blue-600">${accuracy}</div>
+                            </div>
+                            <div class="bg-green-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-600">Correct</div>
+                                <div class="text-3xl font-bold text-green-600">${correctCount}</div>
+                            </div>
+                            <div class="bg-red-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-600">Wrong</div>
+                                <div class="text-3xl font-bold text-red-600">${wrongCount}</div>
+                            </div>
+                            <div class="bg-purple-50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-600">Violations</div>
+                                <div class="text-3xl font-bold text-purple-600">${violCount}/3</div>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t pt-4">
+                            <h4 class="font-bold text-gray-900 mb-3">Questions Breakdown</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-700">Total Questions:</span>
+                                    <span class="font-bold text-gray-900">${totalQuestions}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-700">Answered:</span>
+                                    <span class="font-bold text-blue-600">${answeredCount}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-700">Unanswered:</span>
+                                    <span class="font-bold text-yellow-600">${skippedCount}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-4">
+                            <h4 class="font-bold text-gray-900 mb-3">Performance</h4>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full" style="width: ${accuracy}"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2">Score: ${correctCount}/${totalQuestions} correct (${accuracy} accuracy)</p>
+                        </div>
+
+                        ${totalQuestions > 0 ? `<div class="border-t pt-4">
+                            <h4 class="font-bold text-gray-900 mb-2">Status Summary</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-green-100 text-green-800 p-2 rounded text-xs text-center">
+                                    <div class="font-bold">${correctCount}</div>
+                                    <div>Correct</div>
+                                </div>
+                                <div class="bg-red-100 text-red-800 p-2 rounded text-xs text-center">
+                                    <div class="font-bold">${wrongCount}</div>
+                                    <div>Incorrect</div>
+                                </div>
+                                <div class="bg-yellow-100 text-yellow-800 p-2 rounded text-xs text-center">
+                                    <div class="font-bold">${skippedCount}</div>
+                                    <div>Skipped</div>
+                                </div>
+                                <div class="bg-purple-100 text-purple-800 p-2 rounded text-xs text-center">
+                                    <div class="font-bold">${violCount}</div>
+                                    <div>Violations</div>
+                                </div>
+                            </div>
+                        </div>` : ''}
+                    </div>
+                `;
+
+                await Swal.fire({
+                    title: `📊 Score: ${name}`,
+                    html: detailsHtml,
+                    icon: 'success',
+                    confirmButtonColor: '#3b82f6',
+                    confirmButtonText: 'Close',
+                    width: '600px'
+                });
+            } catch (err) {
+                console.error('Score fetch error:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error Loading Results',
+                    text: 'Could not load detailed results: ' + err.message
+                });
+            }
+        }
+
+        // Undo submitted status
+        async function undoStudentSubmitted(identifier) {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Undo Submission?',
+                text: 'Mark this student back as "In Progress"?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, Undo'
+            });
+
+            if (!isConfirmed) return;
+
+            try {
+                const res = await fetch(API + '/admin_actions.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        action_type: 'undo_submitted',
+                        reason: 'Admin reversed submission status',
+                        admin_name: 'Admin'
+                    })
+                });
+
+                const data = await res.json();
+                if (data.ok || data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Undone',
+                        text: `${identifier} marked as In Progress`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    setTimeout(pollDashboard, 500);
+                } else {
+                    throw new Error(data.error || 'Failed');
+                }
+            } catch (err) {
+                Swal.fire({icon: 'error', title: 'Error', text: 'Failed: ' + err.message});
+            }
+        }
 
         setInterval(pollDashboard, 5000);
         pollDashboard();

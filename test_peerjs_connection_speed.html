@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerJS Connection Speed Test</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .test-item { margin: 15px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #3b82f6; border-radius: 4px; }
+        .test-title { font-weight: bold; margin-bottom: 8px; }
+        .test-status { font-size: 14px; margin: 5px 0; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .loading { color: #f59e0b; }
+        .time { font-weight: bold; color: #7c3aed; }
+        button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 PeerJS Connection Speed Test</h1>
+        <p>Testing how long it takes to establish peer connections</p>
+        
+        <div id="results"></div>
+        
+        <button onclick="runTests()">Run Test Again</button>
+    </div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        async function testConnection(name, studentId, proctorId) {
+            return new Promise(async (resolve) => {
+                const startTime = Date.now();
+                const log = (msg, className = '') => {
+                    const item = document.createElement('div');
+                    item.className = `test-status ${className}`;
+                    item.textContent = msg;
+                    results.appendChild(item);
+                };
+
+                try {
+                    // Create student peer
+                    const studentPeer = new Peer(studentId);
+                    
+                    let studentConnected = false;
+                    studentPeer.on('open', (id) => {
+                        studentConnected = true;
+                        const elapsed = Date.now() - startTime;
+                        log(`✓ Student peer created (${id}) in <span class="time">${elapsed}ms</span>`, 'success');
+                    });
+
+                    // Wait for student peer to be ready
+                    await new Promise(r => {
+                        const check = setInterval(() => {
+                            if (studentConnected) {
+                                clearInterval(check);
+                                r();
+                            }
+                        }, 100);
+                        setTimeout(() => clearInterval(check), 15000);
+                    });
+
+                    if (!studentConnected) {
+                        throw new Error('Student peer failed to connect');
+                    }
+
+                    // Create proctor peer and call student
+                    const proctorStartTime = Date.now();
+                    const proctorPeer = new Peer(proctorId);
+                    
+                    let proctorConnected = false;
+                    let callEstablished = false;
+
+                    proctorPeer.on('open', (id) => {
+                        proctorConnected = true;
+                        const elapsed = Date.now() - startTime;
+                        log(`✓ Proctor peer created (${id}) in <span class="time">${elapsed}ms</span>`, 'success');
+
+                        // Make call
+                        const callStartTime = Date.now();
+                        const call = proctorPeer.call(studentId, new MediaStream());
+                        
+                        call.on('stream', (remoteStream) => {
+                            if (!callEstablished) {
+                                callEstablished = true;
+                                const callElapsed = Date.now() - callStartTime;
+                                const totalElapsed = Date.now() - startTime;
+                                log(`✓ Video stream received in <span class="time">${callElapsed}ms</span>`, 'success');
+                                log(`⏱️ Total connection time: <span class="time">${totalElapsed}ms</span>`, 'success');
+                                
+                                // Close peers
+                                setTimeout(() => {
+                                    call.close();
+                                    studentPeer.destroy();
+                                    proctorPeer.destroy();
+                                    resolve({
+                                        name: name,
+                                        time: totalElapsed,
+                                        success: true
+                                    });
+                                }, 500);
+                            }
+                        });
+
+                        call.on('error', (err) => {
+                            const elapsed = Date.now() - startTime;
+                            log(`✗ Call error after ${elapsed}ms: ${err.message}`, 'error');
+                            studentPeer.destroy();
+                            proctorPeer.destroy();
+                            resolve({ name: name, time: elapsed, success: false, error: err.message });
+                        });
+                    });
+
+                    // Timeout
+                    setTimeout(() => {
+                        if (!callEstablished) {
+                            const elapsed = Date.now() - startTime;
+                            log(`✗ Connection timeout after ${elapsed}ms`, 'error');
+                            studentPeer.destroy();
+                            proctorPeer.destroy();
+                            resolve({ name: name, time: elapsed, success: false, error: 'Timeout' });
+                        }
+                    }, 20000);
+
+                    proctorPeer.on('error', (err) => {
+                        const elapsed = Date.now() - startTime;
+                        log(`✗ Proctor peer error after ${elapsed}ms: ${err.message}`, 'error');
+                        studentPeer.destroy();
+                        resolve({ name: name, time: elapsed, success: false, error: err.message });
+                    });
+
+                    studentPeer.on('error', (err) => {
+                        const elapsed = Date.now() - startTime;
+                        log(`✗ Student peer error after ${elapsed}ms: ${err.message}`, 'error');
+                        proctorPeer.destroy();
+                        resolve({ name: name, time: elapsed, success: false, error: err.message });
+                    });
+
+                } catch (err) {
+                    const elapsed = Date.now() - startTime;
+                    log(`✗ Exception after ${elapsed}ms: ${err.message}`, 'error');
+                    resolve({ name: name, time: elapsed, success: false, error: err.message });
+                }
+            });
+        }
+
+        async function runTests() {
+            results.innerHTML = '<div class="test-item"><div class="test-title">Testing PeerJS Connection Speed...</div></div>';
+            
+            const tests = [
+                { name: 'Test 1 (Default Cloud)', student: 'student_speed_test_1_' + Date.now(), proctor: 'proctor_speed_test_1_' + Date.now() },
+                { name: 'Test 2 (Default Cloud)', student: 'student_speed_test_2_' + Date.now(), proctor: 'proctor_speed_test_2_' + Date.now() },
+                { name: 'Test 3 (Default Cloud)', student: 'student_speed_test_3_' + Date.now(), proctor: 'proctor_speed_test_3_' + Date.now() }
+            ];
+
+            const times = [];
+            for (const test of tests) {
+                const result = await testConnection(test.name, test.student, test.proctor);
+                times.push(result.time);
+                await new Promise(r => setTimeout(r, 2000));
+            }
+
+            // Summary
+            const avgTime = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+            const summary = document.createElement('div');
+            summary.className = 'test-item';
+            summary.innerHTML = `
+                <div class="test-title">📊 Summary</div>
+                <div class="test-status">Average connection time: <span class="time">${avgTime}ms</span></div>
+                <div class="test-status">Min: <span class="time">${Math.min(...times)}ms</span></div>
+                <div class="test-status">Max: <span class="time">${Math.max(...times)}ms</span></div>
+                <div class="test-status" style="margin-top: 10px;">
+                    ${avgTime < 3000 ? '✓ <span class="success">Connection speed is good!</span>' : avgTime < 8000 ? '⚠️ <span class="loading">Connection speed is slow but acceptable</span>' : '✗ <span class="error">Connection speed is very slow</span>'}
+                </div>
+            `;
+            results.appendChild(summary);
+        }
+
+        // Run on load
+        runTests();
+    </script>
+</body>
+</html>

@@ -31,7 +31,7 @@ try {
             json_out(['error' => 'Identifier and action type required'], 400);
         }
         
-        $validActions = ['time_penalty', 'point_deduction', 'boot_out', 'exam_cancelled', 'warning'];
+        $validActions = ['time_penalty', 'point_deduction', 'boot_out', 'exam_cancelled', 'warning', 'mark_submitted', 'undo_submitted'];
         if (!in_array($actionType, $validActions)) {
             json_out(['error' => 'Invalid action type'], 400);
         }
@@ -43,6 +43,24 @@ try {
         
         // Apply the action to session
         switch ($actionType) {
+            case 'mark_submitted':
+                // Mark a student's current quiz as submitted
+                $updateStmt = $pdo->prepare('UPDATE sessions 
+                                             SET submitted = 1 
+                                             WHERE identifier = ? AND submitted = 0
+                                             ORDER BY created_at DESC LIMIT 1');
+                $updateStmt->execute([$identifier]);
+                break;
+                
+            case 'undo_submitted':
+                // Revert a submitted quiz back to in progress
+                $updateStmt = $pdo->prepare('UPDATE sessions 
+                                             SET submitted = 0, status = NULL 
+                                             WHERE identifier = ? AND submitted = 1
+                                             ORDER BY created_at DESC LIMIT 1');
+                $updateStmt->execute([$identifier]);
+                break;
+            
             case 'point_deduction':
                 $updateStmt = $pdo->prepare('UPDATE sessions 
                                              SET point_deduction = point_deduction + ? 
