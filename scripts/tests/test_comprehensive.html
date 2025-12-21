@@ -86,7 +86,7 @@
     </div>
 
     <script>
-        const API = '/Quiz-App/api';
+        const API = 'api';
         let testResults = {
             config: null,
             snapshot: null,
@@ -135,7 +135,7 @@
 
         async function testConfigLoading() {
             try {
-                const response = await fetch('/Quiz-App/quiz_new.php', {
+                const response = await fetch('quiz_new.php', {
                     method: 'HEAD'
                 });
                 
@@ -193,7 +193,7 @@
 
         async function testAdminUI() {
             try {
-                const response = await fetch('/Quiz-App/admin.php');
+                const response = await fetch('admin.php');
                 const html = await response.text();
                 
                 const hasSnapViewer = html.includes('loadSnapBtn') && html.includes('snapStudentId');
@@ -215,7 +215,7 @@
 
         async function testTimeAdjustment() {
             try {
-                const response = await fetch('/Quiz-App/proctor.php');
+                const response = await fetch('proctor.php');
                 const html = await response.text();
                 
                 // Look for input fields for time/point adjustment instead of hardcoded values

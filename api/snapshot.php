@@ -27,7 +27,7 @@ try {
         foreach ($rows as &$row) {
             if ($row && $row['filename']) {
                 $path = ltrim($row['filename'], '/');
-                $row['url'] = '/Quiz-App/uploads/' . $path;
+                $row['url'] = '/uploads/' . $path;
             }
         }
 
@@ -141,7 +141,7 @@ try {
                 'ok' => true, 
                 'type' => $type, 
                 'filename' => $filename, 
-                'url' => '/Quiz-App/uploads/' . $filename,
+                'url' => '/uploads/' . $filename,
                 'processed_with' => $useIntervention ? 'intervention' : 'basic'
             ]);
         } else {

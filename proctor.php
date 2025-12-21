@@ -433,7 +433,7 @@ if ($studentFilter) {
     </footer>
 
     <script>
-        const API = '/Quiz-App/api';
+        const API = 'api';
         let refreshInterval = null;
         
         // PeerJS for live video streaming
@@ -831,7 +831,7 @@ if ($studentFilter) {
 
         async function applyAction(identifier, studentName, actionType) {
             let value = 0;
-            let apiEndpoint = '/Quiz-App/api/admin_actions.php';
+            let apiEndpoint = 'api/admin_actions.php';
             
             // Get reason from user
             const { value: reason } = await Swal.fire({
@@ -867,7 +867,7 @@ if ($studentFilter) {
                 value = parseInt(timeInput) * 60; // Convert to seconds
                 
                 if (actionType === 'time_add') {
-                    apiEndpoint = '/Quiz-App/api/time_control.php';
+                    apiEndpoint = 'api/time_control.php';
                 } else {
                     // For time_penalty, negate the value
                     value = -value;
@@ -978,7 +978,7 @@ if ($studentFilter) {
 
             if (message) {
                 try {
-                    const response = await fetch('/Quiz-App/api/messages.php', {
+                    const response = await fetch('api/messages.php', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
@@ -1065,7 +1065,7 @@ if ($studentFilter) {
             if (!reason) return;
 
             try {
-                const response = await fetch('/Quiz-App/api/time_control.php', {
+                const response = await fetch('api/time_control.php', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({

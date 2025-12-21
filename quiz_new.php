@@ -490,7 +490,7 @@ foreach ($questionIds as $qid) {
     <canvas id="snapshot" style="display:none;"></canvas>
 
     <script>
-        const API = '/Quiz-App/api';
+        const API = 'api';
         const identifier = '<?php echo $studentMatric; ?>';
         const studentName = '<?php echo htmlspecialchars($studentName); ?>';
         const studentGroup = <?php echo (int)$studentGroup; ?>;

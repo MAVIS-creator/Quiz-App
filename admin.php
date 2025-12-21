@@ -44,6 +44,7 @@ $violations = $violStmt->fetchAll();
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <style>
         /* Design tokens */
         :root {
@@ -171,7 +172,7 @@ $violations = $violStmt->fetchAll();
                                 <p class="text-sm font-semibold text-gray-800">Upload .md/.txt File (Group <?php echo $adminGroup; ?>)</p>
                                 <p class="text-xs text-gray-500">Format: # Group, ## Question, Option, ~~Correct~~</p>
                             </div>
-                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                            <a href="/samples/sample_questions_group<?php echo $adminGroup; ?>.md" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
                                 <i class='bx bx-download'></i> Download MD sample
                             </a>
                         </div>
@@ -202,7 +203,7 @@ $violations = $violStmt->fetchAll();
                                 <p class="text-sm font-semibold text-gray-800">Upload .csv File (Group <?php echo $adminGroup; ?>)</p>
                                 <p class="text-xs text-gray-500">Headers: Group,Category,Prompt,Option A,Option B,Option C,Option D,Answer</p>
                             </div>
-                            <a href="/Quiz-App/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
+                            <a href="/samples/sample_questions_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1" download>
                                 <i class='bx bx-download'></i> Download CSV sample
                             </a>
                         </div>
@@ -446,7 +447,7 @@ $violations = $violStmt->fetchAll();
                             <p class="text-sm font-semibold text-gray-800">Upload CSV File</p>
                             <p class="text-xs text-gray-500">Format: Name, Matric/ID, Phone (CSV with headers)</p>
                         </div>
-                        <a href="/Quiz-App/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
+                        <a href="/samples/sample_students_group<?php echo $adminGroup; ?>.csv" class="text-xs font-semibold text-green-700 hover:text-green-900 flex items-center gap-1" download>
                             <i class='bx bx-download'></i> Download sample
                         </a>
                     </div>
@@ -509,7 +510,7 @@ $violations = $violStmt->fetchAll();
     </footer>
 
     <script>
-        const API = '/Quiz-App/api';
+        const API = 'api';
 
         document.getElementById('saveCfg').onclick = async () => {
             const questionCount = Number(document.getElementById('qcount').value);

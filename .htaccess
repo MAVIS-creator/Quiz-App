@@ -1,5 +1,5 @@
 RewriteEngine On
-RewriteBase /Quiz-App/
+RewriteBase /
 
 # Prevent direct access to includes
 <Files "db.php">

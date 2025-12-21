@@ -23,7 +23,7 @@ try {
         foreach ($rows as &$row) {
             if ($hasFilename && isset($row['filename'])) {
                 $path = ltrim($row['filename'], '/');
-                $row['url'] = '/Quiz-App/uploads/' . $path;
+                $row['url'] = '/uploads/' . $path;
             }
         }
         json_out(['clips' => $rows]);
@@ -72,7 +72,7 @@ try {
                     json_out([
                         'ok' => true,
                         'filename' => $filename,
-                        'url' => '/Quiz-App/uploads/' . $filename,
+                        'url' => '/uploads/' . $filename,
                         'duration' => $duration
                     ]);
                 } else {
