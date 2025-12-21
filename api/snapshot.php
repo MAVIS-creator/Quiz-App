@@ -20,7 +20,8 @@ try {
         $rows = $stmt->fetchAll();
         foreach ($rows as &$row) {
             if ($row && $row['filename']) {
-                $row['url'] = '/Quiz-App/uploads/' . $row['filename'];
+                $path = ltrim($row['filename'], '/');
+                $row['url'] = '/Quiz-App/uploads/' . $path;
             }
         }
 
@@ -40,10 +41,14 @@ try {
         $type = strtolower($data['type'] ?? 'preview'); // preview | violation
         if (!$id || !$image) json_out(['error' => 'identifier and image required'], 400);
 
-        // Create uploads directory if it doesn't exist
+        // Create uploads/{identifier} directory if it doesn't exist
         $uploadsDir = __DIR__ . '/../uploads';
         if (!is_dir($uploadsDir)) {
             mkdir($uploadsDir, 0755, true);
+        }
+        $idDir = $uploadsDir . '/' . $id;
+        if (!is_dir($idDir)) {
+            mkdir($idDir, 0755, true);
         }
 
         // Convert data URL to file
@@ -51,7 +56,8 @@ try {
             $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
             $data = base64_decode($m[2]);
             $prefix = $type === 'violation' ? 'snapshotv_' : 'snapshot_';
-            $filename = $prefix . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
+            $baseName = $prefix . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
+            $filename = $id . '/' . $baseName; // store relative path including identifier folder
             $filepath = $uploadsDir . '/' . $filename;
             
             if (file_put_contents($filepath, $data) !== false) {

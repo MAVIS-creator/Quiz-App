@@ -22,7 +22,8 @@ try {
         $rows = $stmt->fetchAll();
         foreach ($rows as &$row) {
             if ($hasFilename && isset($row['filename'])) {
-                $row['url'] = '/Quiz-App/uploads/' . $row['filename'];
+                $path = ltrim($row['filename'], '/');
+                $row['url'] = '/Quiz-App/uploads/' . $path;
             }
         }
         json_out(['clips' => $rows]);
@@ -37,10 +38,14 @@ try {
         
         if (!$id || !$audio) json_out(['error' => 'identifier and audio required'], 400);
 
-        // Create uploads directory if it doesn't exist
+        // Create uploads/{identifier} directory if it doesn't exist
         $uploadsDir = __DIR__ . '/../uploads';
         if (!is_dir($uploadsDir)) {
             mkdir($uploadsDir, 0755, true);
+        }
+        $idDir = $uploadsDir . '/' . $id;
+        if (!is_dir($idDir)) {
+            mkdir($idDir, 0755, true);
         }
 
         // Convert data URL to file (audio/wav;base64 or audio/webm;base64)
@@ -54,7 +59,8 @@ try {
 
             // If schema has filename column, persist to disk; else fall back to audio_data column
             if ($hasFilename) {
-                $filename = 'audio_' . $id . '_' . time() . '_' . uniqid() . '.' . $audioType;
+                $baseName = 'audio_' . $id . '_' . time() . '_' . uniqid() . '.' . $audioType;
+                $filename = $id . '/' . $baseName; // store relative path including identifier folder
                 $filepath = $uploadsDir . '/' . $filename;
                 
                 if (file_put_contents($filepath, $audioData) !== false) {
