@@ -23,7 +23,12 @@ $adminGroup = $_SESSION['admin_group'] ?? 1;
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 // Get config
-$cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch();
+$cfgStmt = $pdo->prepare('SELECT exam_minutes, question_count FROM config WHERE id=?');
+$cfgStmt->execute([$adminGroup]);
+$cfg = $cfgStmt->fetch();
+if (!$cfg) {
+    $cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch() ?: ['exam_minutes' => 60, 'question_count' => 40];
+}
 
 // Get sessions with filtering
 $filter = $_GET['filter'] ?? 'all'; // all, today, submitted, in-progress, booted
@@ -309,7 +314,7 @@ $stats = $statsStmt->fetch();
             </div>
 
             <!-- Filters -->
-            <div class="mb-6 flex flex-wrap gap-2">
+            <div class="mb-6 flex gap-2 md:flex-wrap overflow-x-auto -mx-2 px-2">
                 <button type="button" data-filter="all" class="filter-chip <?php echo $filter === 'all' ? 'active' : ''; ?>">
                     <i class='bx bx-filter-alt'></i> All
                 </button>
@@ -328,15 +333,15 @@ $stats = $statsStmt->fetch();
                 <input type="date" id="dateFilter" value="<?php echo $filterDate; ?>" class="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium">
             </div>
 
-            <!-- Sessions Table -->
-            <div class="overflow-x-auto">
+            <!-- Sessions Table (Desktop) -->
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full">
                     <thead class="bg-gray-50 border-b-2 border-gray-200">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-700">Student</th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-700">Matric</th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-700">Progress</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold text-gray-700">Score</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-gray-700">Accuracy</th>
                             <th class="px-4 py-3 text-center text-xs font-bold text-gray-700">Violations</th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-700">Status</th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-700">Last Saved</th>
@@ -398,6 +403,48 @@ $stats = $statsStmt->fetch();
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Sessions List (Mobile) -->
+            <div class="md:hidden" id="sessionsListMobile">
+                <?php foreach ($sessions as $session): 
+                    $totalQuestions = (int)($session['questions_total'] ?? 0);
+                    $answered = (int)($session['questions_answered'] ?? 0);
+                    $progressPct = $totalQuestions > 0 ? min(100, ($answered / $totalQuestions) * 100) : 0;
+                    $accuracyVal = isset($session['accuracy']) ? $session['accuracy'] : ($session['accuracy_score'] ?? null);
+                    $violCount = (int)($session['violations'] ?? 0);
+                ?>
+                <div class="border border-gray-200 rounded-xl p-4 mb-3" data-identifier="<?php echo htmlspecialchars($session['identifier'] ?? ''); ?>">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-gray-900"><?php echo htmlspecialchars($session['name']); ?></div>
+                            <div class="text-xs text-gray-600"><?php echo htmlspecialchars($session['identifier']); ?></div>
+                        </div>
+                        <div class="text-xs">
+                            <?php if ($session['submitted']): ?>
+                                <span class="badge badge-success"><i class='bx bx-check-circle'></i> Submitted</span>
+                            <?php elseif (($session['status'] ?? '') === 'booted'): ?>
+                                <span class="badge badge-danger"><i class='bx bx-x-circle'></i> Booted</span>
+                            <?php else: ?>
+                                <span class="badge badge-info"><i class='bx bx-hourglass'></i> In Progress</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full js-progress-bar" style="width: <?php echo $progressPct; ?>%"></div>
+                            </div>
+                            <span class="text-xs text-gray-600 js-progress-text"><?php echo round($progressPct); ?>%</span>
+                        </div>
+                        <div class="flex items-center justify-between mt-2 text-xs text-gray-700">
+                            <span><i class='bx bx-target-lock mr-1'></i><span class="js-accuracy"><?php echo $session['submitted'] ? number_format((float)$accuracyVal, 1) . '%' : '-'; ?></span></span>
+                            <span class="js-violations"><i class='bx bx-error-circle mr-1'></i><?php echo $violCount; ?>/3</span>
+                            <span class="js-last-saved"><i class='bx bx-time mr-1'></i><?php echo isset($session['last_saved']) ? date('H:i', strtotime($session['last_saved'])) : date('H:i', strtotime($session['created_at'])); ?></span>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
             </div>
 
             <?php if (empty($sessions)): ?>
@@ -814,7 +861,7 @@ $stats = $statsStmt->fetch();
                 const res = await fetch(API + '/config.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ questionCount, examMinutes })
+                    body: JSON.stringify({ questionCount, examMinutes, group: GROUP })
                 });
 
                 if (res.ok) {
@@ -961,6 +1008,49 @@ $stats = $statsStmt->fetch();
             }).join('');
         }
 
+        function renderSessionsMobile(rows, accuracyMap) {
+            const list = document.getElementById('sessionsListMobile');
+            if (!list) return;
+            list.innerHTML = rows.map(session => {
+                const ids = safeJson(session.question_ids_json, []);
+                const answers = safeJson(session.answers_json, {});
+                const answeredCount = Array.isArray(answers) ? answers.filter(a => a !== null && a !== '').length : Object.values(answers).filter(a => a !== null && a !== '').length;
+                const total = Array.isArray(ids) ? ids.length : 0;
+                const progressPct = total > 0 ? Math.min(100, Math.round((answeredCount / total) * 100)) : 0;
+                const accRow = accuracyMap.get(session.identifier);
+                const submitted = accRow ? !!accRow.submitted : !!session.submitted;
+                const accVal = accRow ? (accRow.accuracy ?? accRow.accuracy_score ?? 0) : (session.accuracy_score ?? session.accuracy ?? 0);
+                const vioCount = accRow && typeof accRow.violations === 'number' ? accRow.violations : (session.violations ?? 0);
+                const statusBadge = submitted ? `<span class="badge badge-success"><i class='bx bx-check-circle'></i> Submitted</span>`
+                    : (String(session.status)==='booted' ? `<span class="badge badge-danger"><i class='bx bx-x-circle'></i> Booted</span>`
+                    : `<span class="badge badge-info"><i class='bx bx-hourglass'></i> In Progress</span>`);
+
+                return `
+                <div class="border border-gray-200 rounded-xl p-4 mb-3" data-identifier="${escapeHtml(session.identifier || '')}">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-gray-900">${escapeHtml(session.name || '')}</div>
+                            <div class="text-xs text-gray-600">${escapeHtml(session.identifier || '')}</div>
+                        </div>
+                        <div class="text-xs">${statusBadge}</div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full js-progress-bar" style="width: ${progressPct}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-600 js-progress-text">${progressPct}%</span>
+                        </div>
+                        <div class="flex items-center justify-between mt-2 text-xs text-gray-700">
+                            <span><i class='bx bx-target-lock mr-1'></i><span class="js-accuracy">${submitted ? Number(accVal).toFixed(1) + '%' : '-'}</span></span>
+                            <span class="js-violations"><i class='bx bx-error-circle mr-1'></i>${vioCount}/3</span>
+                            <span class="js-last-saved"><i class='bx bx-time mr-1'></i>${escapeHtml(session.last_saved || session.created_at || '')}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         function safeJson(val, fallback) {
             try { return JSON.parse(val || (Array.isArray(fallback)||typeof fallback==='object' ? JSON.stringify(fallback) : 'null')); } catch { return fallback; }
         }
@@ -984,6 +1074,7 @@ $stats = $statsStmt->fetch();
 
                 const filtered = applyFilter(sessionsData);
                 renderSessions(filtered, accuracyMap);
+                renderSessionsMobile(filtered, accuracyMap);
 
                 // Update stats
                 document.getElementById('statTotalSessions').textContent = filtered.length;

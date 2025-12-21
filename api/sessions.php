@@ -37,12 +37,16 @@ try {
         
         if ($check) {
             // Update existing session
-            $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE session_id=?')
-                ->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $sessionId]);
+                $upd = $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE session_id=?');
+                if (!$upd->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $sessionId])) {
+                    json_out(['error' => 'Failed to update session: ' . implode(' ', $upd->errorInfo())], 500);
+                }
         } else {
             // Insert new session
-            $pdo->prepare('INSERT INTO sessions(identifier, session_id, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes, `group`, session_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURDATE())')
-                ->execute([$identifier, $sessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $group]);
+                $ins = $pdo->prepare('INSERT INTO sessions(identifier, session_id, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes, `group`, session_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURDATE())');
+                if (!$ins->execute([$identifier, $sessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $group])) {
+                    json_out(['error' => 'Failed to insert session: ' . implode(' ', $ins->errorInfo())], 500);
+                }
         }
 
         json_out(['ok' => true]);

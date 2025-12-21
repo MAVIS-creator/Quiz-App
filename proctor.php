@@ -9,22 +9,47 @@ if (!isset($_SESSION['admin_logged_in'])) {
     exit;
 }
 
-// Get violations sorted by student name
-$violCounts = $pdo->query('
+// Get admin's current group
+$adminGroup = intval($_SESSION['admin_group'] ?? 1);
+
+// Get all active sessions (students who have started the quiz) - FILTERED BY GROUP
+$activeSessions = $pdo->prepare('
+    SELECT s.identifier, s.name, s.submitted, s.created_at, s.last_saved, s.violations,
+           COUNT(v.id) as violation_count
+    FROM sessions s
+    LEFT JOIN violations v ON s.identifier = v.identifier
+    WHERE s.`group` = ?
+    GROUP BY s.identifier, s.name, s.submitted, s.created_at, s.last_saved, s.violations
+    ORDER BY s.name ASC, s.identifier ASC
+');
+$activeSessions->execute([$adminGroup]);
+$activeSessions = $activeSessions->fetchAll();
+
+// Get violations sorted by student name - FILTERED BY GROUP
+$violCounts = $pdo->prepare('
     SELECT v.identifier, COUNT(*) as count, s.name 
     FROM violations v
     LEFT JOIN sessions s ON v.identifier = s.identifier
+    WHERE s.`group` = ?
     GROUP BY v.identifier
     ORDER BY s.name ASC, v.identifier ASC
-')->fetchAll();
+');
+$violCounts->execute([$adminGroup]);
+$violCounts = $violCounts->fetchAll();
 
 // Get specific student violations if requested
 $studentFilter = $_GET['student'] ?? null;
 $detailedViolations = [];
 if ($studentFilter) {
-    $stmt = $pdo->prepare('SELECT * FROM violations WHERE identifier = ? ORDER BY created_at DESC');
-    $stmt->execute([$studentFilter]);
-    $detailedViolations = $stmt->fetchAll();
+    // Verify the student belongs to this group before showing their violations
+    $studentCheck = $pdo->prepare('SELECT identifier FROM sessions WHERE identifier = ? AND `group` = ? LIMIT 1');
+    $studentCheck->execute([$studentFilter, $adminGroup]);
+    
+    if ($studentCheck->fetch()) {
+        $stmt = $pdo->prepare('SELECT * FROM violations WHERE identifier = ? ORDER BY created_at DESC');
+        $stmt->execute([$studentFilter]);
+        $detailedViolations = $stmt->fetchAll();
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -74,6 +99,86 @@ if ($studentFilter) {
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Active Students Section -->
+        <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class='bx bx-user-check text-2xl mr-2 text-blue-600'></i>
+                Active Students (Started Quiz)
+            </h2>
+            
+            <?php if (empty($activeSessions)): ?>
+                <div class="text-center py-8">
+                    <i class='bx bx-user-x text-6xl text-gray-400 mb-4'></i>
+                    <p class="text-gray-600">No students have started the quiz yet.</p>
+                </div>
+            <?php else: ?>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Student Name</th>
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Matric/ID</th>
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Violations</th>
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Last Activity</th>
+                                <th class="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($activeSessions as $session): ?>
+                            <tr class="border-t hover:bg-gray-50">
+                                <td class="py-3 px-4 font-semibold"><?php echo htmlspecialchars($session['name'] ?? 'Unknown'); ?></td>
+                                <td class="py-3 px-4 font-mono text-xs"><?php echo htmlspecialchars($session['identifier']); ?></td>
+                                <td class="py-3 px-4">
+                                    <?php if ($session['submitted']): ?>
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                            <i class='bx bx-check-circle'></i> Submitted
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                            <i class='bx bx-time'></i> In Progress
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <?php 
+                                    $vcount = intval($session['violation_count']);
+                                    if ($vcount > 0): ?>
+                                        <span class="text-xl font-bold <?php echo $vcount >= 3 ? 'text-red-600' : 'text-yellow-600'; ?>">
+                                            <?php echo $vcount; ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-gray-400">0</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-3 px-4 text-xs text-gray-600">
+                                    <i class='bx bx-time mr-1'></i>
+                                    <?php echo htmlspecialchars($session['last_saved'] ?? $session['created_at'] ?? 'N/A'); ?>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center space-x-2">
+                                        <button onclick="sendMessage('<?php echo htmlspecialchars($session['identifier']); ?>', '<?php echo htmlspecialchars($session['name'] ?? 'Unknown'); ?>')" class="text-blue-600 hover:text-blue-800 font-semibold text-xs flex items-center px-2 py-1 border border-blue-300 rounded hover:bg-blue-50">
+                                            <i class='bx bx-message text-lg mr-1'></i>
+                                            Message
+                                        </button>
+                                        <button onclick="addTime('<?php echo htmlspecialchars($session['identifier']); ?>', '<?php echo htmlspecialchars($session['name'] ?? 'Unknown'); ?>')" class="text-green-600 hover:text-green-800 font-semibold text-xs flex items-center px-2 py-1 border border-green-300 rounded hover:bg-green-50">
+                                            <i class='bx bx-time-five text-lg mr-1'></i>
+                                            Add Time
+                                        </button>
+                                        <button onclick="showActionMenu('<?php echo htmlspecialchars($session['identifier']); ?>', '<?php echo htmlspecialchars($session['name'] ?? 'Unknown'); ?>')" class="text-purple-600 hover:text-purple-800 font-semibold text-xs flex items-center px-2 py-1 border border-purple-300 rounded hover:bg-purple-50">
+                                            <i class='bx bx-cog text-lg mr-1'></i>
+                                            More
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
         <!-- Violations Summary -->
         <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
             <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -637,6 +742,75 @@ if ($studentFilter) {
                         confirmButtonColor: '#dc2626'
                     });
                 }
+            }
+        }
+
+        // Add Time to Student
+        async function addTime(identifier, studentName) {
+            const { value: timeInput } = await Swal.fire({
+                title: `Add Time for ${studentName}`,
+                input: 'number',
+                inputLabel: 'Enter duration in minutes',
+                inputValue: '5',
+                inputAttributes: {
+                    'min': '1',
+                    'max': '120'
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Add Time',
+                confirmButtonColor: '#10b981'
+            });
+
+            if (!timeInput) return;
+
+            const seconds = parseInt(timeInput) * 60;
+
+            // Ask for reason
+            const { value: reason } = await Swal.fire({
+                title: 'Enter Reason',
+                input: 'textarea',
+                inputLabel: 'Reason for adding time',
+                inputPlaceholder: 'Enter the reason for this action...',
+                inputAttributes: {
+                    'aria-label': 'Reason'
+                },
+                showCancelButton: true,
+                confirmButtonColor: '#10b981'
+            });
+
+            if (!reason) return;
+
+            try {
+                const response = await fetch('/Quiz-App/api/time_control.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        adjustment_seconds: seconds,
+                        reason: reason,
+                        admin_name: 'Admin'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success || data.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Time Added',
+                        text: `Added ${timeInput} minute(s) to ${studentName}'s exam`,
+                        confirmButtonColor: '#10b981'
+                    });
+                } else {
+                    throw new Error(data.error || 'Failed');
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to add time: ' + error.message,
+                    confirmButtonColor: '#dc2626'
+                });
             }
         }
     </script>

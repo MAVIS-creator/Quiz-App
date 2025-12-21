@@ -56,12 +56,47 @@ try {
             $totalQuestions = count($questionIds);
             
             foreach ($questionIds as $qid) {
-                $qStmt = $pdo->prepare('SELECT answer FROM questions WHERE id = ?');
+                $qStmt = $pdo->prepare('SELECT option_a, option_b, option_c, option_d, answer FROM questions WHERE id = ?');
                 $qStmt->execute([$qid]);
-                $correctAnswer = $qStmt->fetchColumn();
-                
+                $qRow = $qStmt->fetch();
+                if (!$qRow) continue;
+
+                $optA = trim($qRow['option_a'] ?? '');
+                $optB = trim($qRow['option_b'] ?? '');
+                $optC = trim($qRow['option_c'] ?? '');
+                $optD = trim($qRow['option_d'] ?? '');
+                $correctField = trim($qRow['answer'] ?? '');
+
+                // Determine correct letter from stored answer
+                $correctLetter = null;
+                $correctLower = strtolower($correctField);
+                if (in_array($correctLower, ['a','b','c','d'], true)) {
+                    $correctLetter = strtoupper($correctLower);
+                } else {
+                    // Match by option text
+                    if (strcasecmp($correctField, $optA) === 0) $correctLetter = 'A';
+                    elseif (strcasecmp($correctField, $optB) === 0) $correctLetter = 'B';
+                    elseif (strcasecmp($correctField, $optC) === 0) $correctLetter = 'C';
+                    elseif (strcasecmp($correctField, $optD) === 0) $correctLetter = 'D';
+                }
+
                 $studentAnswer = $answers[$qid] ?? '';
-                if (strtolower(trim($studentAnswer)) === strtolower(trim($correctAnswer))) {
+                $studentLower = strtolower(trim($studentAnswer));
+
+                // Compare robustly: letters or full text
+                $isCorrect = false;
+                if (in_array($studentLower, ['a','b','c','d'], true)) {
+                    $isCorrect = ($correctLetter && $studentLower === strtolower($correctLetter));
+                } else {
+                    // Compare text
+                    if ($correctLetter === 'A') $isCorrect = (strcasecmp($studentAnswer, $optA) === 0);
+                    elseif ($correctLetter === 'B') $isCorrect = (strcasecmp($studentAnswer, $optB) === 0);
+                    elseif ($correctLetter === 'C') $isCorrect = (strcasecmp($studentAnswer, $optC) === 0);
+                    elseif ($correctLetter === 'D') $isCorrect = (strcasecmp($studentAnswer, $optD) === 0);
+                    else $isCorrect = (strcasecmp($studentAnswer, $correctField) === 0);
+                }
+
+                if ($isCorrect) {
                     $correctCount++;
                 }
             }

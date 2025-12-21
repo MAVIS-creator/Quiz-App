@@ -3,14 +3,28 @@ session_start();
 require __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $input = trim($_POST['matric_no'] ?? '');
+    $raw = $_POST['matric_no'] ?? '';
+    $input = trim($raw);
+    // Normalize common formatting issues
+    $normalized = preg_replace('/\s+/', '', $input); // remove all whitespace
+    $normalizedUpper = strtoupper($normalized);
+    // Phone normalization: try with and without leading 0
+    $normalizedPhone = preg_replace('/\D+/', '', $input); // digits only
+    $normalizedPhoneNoLeading = ltrim($normalizedPhone, '0');
 
-    // Lookup student by identifier (matric) or phone in DB
     try {
         $pdo = db();
+        // Try exact identifier (case-insensitive) or phone
         $stmt = $pdo->prepare('SELECT identifier, name, phone, group_id FROM students WHERE UPPER(identifier) = UPPER(?) OR phone = ? LIMIT 1');
-        $stmt->execute([$input, $input]);
+        $stmt->execute([$normalizedUpper, $normalizedPhone]);
         $student = $stmt->fetch();
+
+        // Fallback: try identifier without spaces, and phone without leading zero
+        if (!$student) {
+            $stmt2 = $pdo->prepare('SELECT identifier, name, phone, group_id FROM students WHERE UPPER(identifier) = UPPER(?) OR phone = ? LIMIT 1');
+            $stmt2->execute([$normalizedUpper, $normalizedPhoneNoLeading]);
+            $student = $stmt2->fetch();
+        }
 
         if ($student) {
             $_SESSION['student_matric'] = $student['identifier'];
@@ -166,6 +180,16 @@ if (isset($_SESSION['student_matric'])) {
                         class="input-focus w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all duration-300 text-gray-800 font-medium"
                     >
                     <p class="text-xs text-gray-500 mt-1">You can use either your matric number or phone number</p>
+                    <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p class="text-xs text-blue-800 font-semibold mb-1 flex items-center">
+                            <i class='bx bx-info-circle mr-1'></i> Troubleshooting Tips:
+                        </p>
+                        <ul class="text-xs text-blue-700 space-y-1 ml-4">
+                            <li>• Enter matric number <strong>without spaces</strong> (e.g., 2025003519)</li>
+                            <li>• If using phone, try <strong>without leading 0</strong> (e.g., 8012345678)</li>
+                            <li>• Make sure you're registered in the system</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <button 

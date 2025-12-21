@@ -28,12 +28,15 @@ if (!$studentGroup || $studentGroup <= 0) {
 }
 $isTestAccount = (strpos(strtolower($studentMatric), 'test') === 0 || strtolower($studentMatric) === 'test');
 
-// Check for existing session TODAY (prevent same-day retakes, unless test account)
-if (!$isTestAccount) {
-    $todayCheck = $pdo->prepare('SELECT id FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE() AND submitted = 1');
-    $todayCheck->execute([$studentMatric, $studentGroup]);
-    
-    if ($todayCheck->fetch()) {
+// Check for existing session TODAY
+$todaySessionStmt = $pdo->prepare('SELECT session_id, submitted, status, time_adjustment_seconds, created_at FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE() ORDER BY created_at DESC LIMIT 1');
+$todaySessionStmt->execute([$studentMatric, $studentGroup]);
+$existingSession = $todaySessionStmt->fetch();
+
+// If there's an existing session today
+if ($existingSession) {
+    // Check if already submitted (block re-entry unless test account)
+    if (!$isTestAccount && $existingSession['submitted'] == 1) {
         echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
         echo "<script>
             Swal.fire({
@@ -48,40 +51,57 @@ if (!$isTestAccount) {
         </script></body></html>";
         exit;
     }
+    
+    // Check if booted or cancelled by admin
+    if (in_array($existingSession['status'], ['booted', 'cancelled'])) {
+        echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
+        echo "<script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Access Denied',
+                text: 'Your exam has been " . ($existingSession['status'] === 'booted' ? 'terminated' : 'cancelled') . " by the administrator.',
+                confirmButtonColor: '#dc2626',
+                allowOutsideClick: false
+            }).then(() => {
+                window.location.href = 'login.php';
+            });
+        </script></body></html>";
+        exit;
+    }
+    
+    // Resume existing session (not submitted, not cancelled/booted)
+    $sessionId = $existingSession['session_id'];
+    $timeAdjustment = $existingSession['time_adjustment_seconds'] ?? 0;
+    
+    // Calculate elapsed time since session creation
+    $sessionStart = new DateTime($existingSession['created_at']);
+    $now = new DateTime();
+    $elapsedSeconds = $now->getTimestamp() - $sessionStart->getTimestamp();
+    
+    $isResuming = true;
+} else {
+    // Create new session ID for first-time attempt today
+    $sessionId = $studentMatric . '_' . date('YmdHis') . '_' . uniqid();
+    $timeAdjustment = 0;
+    $elapsedSeconds = 0;
+    $isResuming = false;
 }
 
-// Generate unique session ID for this quiz attempt
-$sessionId = $studentMatric . '_' . date('YmdHis') . '_' . uniqid();
 $_SESSION['quiz_session_id'] = $sessionId;
 
-// Check student status
-$statusStmt = $pdo->prepare('SELECT status, time_adjustment_seconds FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE() ORDER BY created_at DESC LIMIT 1');
-$statusStmt->execute([$studentMatric, $studentGroup]);
-$statusData = $statusStmt->fetch();
-
-if ($statusData && in_array($statusData['status'], ['booted', 'cancelled'])) {
-    echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
-    echo "<script>
-        Swal.fire({
-            icon: 'error',
-            title: 'Access Denied',
-            text: 'Your exam has been " . ($statusData['status'] === 'booted' ? 'terminated' : 'cancelled') . " by the administrator.',
-            confirmButtonColor: '#dc2626',
-            allowOutsideClick: false
-        }).then(() => {
-            window.location.href = 'login.php';
-        });
-    </script></body></html>";
-    exit;
+$cfgStmt = $pdo->prepare('SELECT exam_minutes, question_count FROM config WHERE id=?');
+$cfgStmt->execute([$studentGroup]);
+$cfg = $cfgStmt->fetch();
+if (!$cfg) {
+    $cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch() ?: ['exam_minutes' => 60, 'question_count' => 40];
 }
-
-$cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch();
 $examMin = $cfg['exam_minutes'] ?? 60;
 $count = $cfg['question_count'] ?? 40;
 
-// Get time adjustment
-$timeAdjustment = $statusData['time_adjustment_seconds'] ?? 0;
-$totalSeconds = ($examMin * 60) + $timeAdjustment;
+// Calculate remaining time (total time + adjustments - elapsed)
+$totalSeconds = ($examMin * 60) + $timeAdjustment - $elapsedSeconds;
+// Ensure we don't go negative
+if ($totalSeconds < 0) $totalSeconds = 0;
 
 // Get or create shuffled questions for this student
 $shuffleStmt = $pdo->prepare('SELECT question_ids_order FROM student_questions WHERE identifier = ? AND group_id = ?');
@@ -444,8 +464,23 @@ foreach ($questionIds as $qid) {
         let audioAnalyser = null;
         let mediaRecorder = null;
         let audioChunks = [];
+        let isResuming = <?php echo $isResuming ? 'true' : 'false'; ?>;
+        
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            // Show resumption notification if applicable
+            if (isResuming) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Resuming Your Exam',
+                    text: 'Your previous answers have been restored. Continue from where you left off.',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            }
+            
             loadSavedAnswers(); // Load previous answers first
             initCamera();
             initAudioMonitoring();
@@ -960,11 +995,8 @@ foreach ($questionIds as $qid) {
             }
             
             try {
-                // Final save
-                const response = await fetch(`${API}/sessions.php`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
+                    // Final save with submission flag
+                    const submitPayload = {
                         identifier: identifier,
                         session_id: sessionId,
                         name: studentName,
@@ -973,10 +1005,47 @@ foreach ($questionIds as $qid) {
                         question_ids: questionIds,
                         submitted: true,
                         group: studentGroup
-                    })
-                });
+                    };
                 
-                if (response.ok) {
+                    let response;
+                    let data;
+                    let retries = 3;
+                    let lastError;
+                
+                    // Retry logic for network resilience
+                    while (retries > 0) {
+                        try {
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 30000);
+                            
+                            response = await fetch(`${API}/sessions.php`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify(submitPayload),
+                                // Add timeout for ngrok
+                                signal: controller.signal
+                            });
+                        
+                            clearTimeout(timeoutId);
+                        data = await response.json();
+                            break; // Success, exit retry loop
+                        } catch (err) {
+                            lastError = err;
+                            retries--;
+                            if (retries > 0) {
+                                await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                            }
+                        }
+                    }
+                
+                    if (retries === 0) {
+                        throw lastError || new Error('Failed to submit after 3 attempts');
+                    }
+                
+                    if (response.ok && (data.ok || data.success)) {
                     if (cameraStream) {
                         cameraStream.getTracks().forEach(track => track.stop());
                     }
@@ -991,13 +1060,14 @@ foreach ($questionIds as $qid) {
                         window.location.href = 'result.php';
                     });
                 } else {
-                    throw new Error('Submit failed');
+                    throw new Error(data.error || 'Submit failed with unknown error');
                 }
             } catch (e) {
+                console.error('Submit error:', e);
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to submit quiz. Please try again.',
+                    text: 'Failed to submit quiz. Please try again.\n\nDetails: ' + e.message,
                     confirmButtonColor: '#dc2626'
                 });
             }

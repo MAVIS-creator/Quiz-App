@@ -1,11 +1,11 @@
 <?php
+session_start();
 require __DIR__ . '/../db.php';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         json_out(['error' => 'Method not allowed'], 405);
     }
-    session_start();
     $group = intval($_SESSION['admin_group'] ?? 1);
 
     $data = json_decode(file_get_contents('php://input'), true);
