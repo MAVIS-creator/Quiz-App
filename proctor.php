@@ -443,8 +443,22 @@ if ($studentFilter) {
         // Initialize PeerJS
         function initPeerJS() {
             try {
-                // Use default PeerJS cloud (most reliable)
-                peer = new Peer('proctor_' + Date.now());
+                // Use local PeerJS server with multiple STUN servers for better connectivity
+                peer = new Peer('proctor_' + Date.now(), {
+                    host: '192.168.1.185',  // Your computer IP (verified: 192.168.1.185)
+                    port: 9000,
+                    path: '/',
+                    secure: false,
+                    config: {
+                        iceServers: [
+                            { urls: ['stun:stun.l.google.com:19302'] },
+                            { urls: ['stun:stun1.l.google.com:19302'] },
+                            { urls: ['stun:stun2.l.google.com:19302'] },
+                            { urls: ['stun:stun3.l.google.com:19302'] },
+                            { urls: ['stun:stun4.l.google.com:19302'] }
+                        ]
+                    }
+                });
                 
                 peer.on('open', (id) => {
                     console.log('Proctor PeerJS connected:', id);

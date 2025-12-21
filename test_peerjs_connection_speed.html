@@ -44,8 +44,22 @@
                 };
 
                 try {
-                    // Create student peer
-                    const studentPeer = new Peer(studentId);
+                    // Create student peer using local PeerJS server
+                    const studentPeer = new Peer(studentId, {
+                        host: '192.168.1.185',
+                        port: 9000,
+                        path: '/',
+                        secure: false,
+                        config: {
+                            iceServers: [
+                                { urls: ['stun:stun.l.google.com:19302'] },
+                                { urls: ['stun:stun1.l.google.com:19302'] },
+                                { urls: ['stun:stun2.l.google.com:19302'] },
+                                { urls: ['stun:stun3.l.google.com:19302'] },
+                                { urls: ['stun:stun4.l.google.com:19302'] }
+                            ]
+                        }
+                    });
                     
                     let studentConnected = false;
                     studentPeer.on('open', (id) => {
@@ -69,9 +83,23 @@
                         throw new Error('Student peer failed to connect');
                     }
 
-                    // Create proctor peer and call student
+                    // Create proctor peer using local PeerJS server and call student
                     const proctorStartTime = Date.now();
-                    const proctorPeer = new Peer(proctorId);
+                    const proctorPeer = new Peer(proctorId, {
+                        host: '192.168.1.185',
+                        port: 9000,
+                        path: '/',
+                        secure: false,
+                        config: {
+                            iceServers: [
+                                { urls: ['stun:stun.l.google.com:19302'] },
+                                { urls: ['stun:stun1.l.google.com:19302'] },
+                                { urls: ['stun:stun2.l.google.com:19302'] },
+                                { urls: ['stun:stun3.l.google.com:19302'] },
+                                { urls: ['stun:stun4.l.google.com:19302'] }
+                            ]
+                        }
+                    });
                     
                     let proctorConnected = false;
                     let callEstablished = false;
@@ -153,9 +181,9 @@
             results.innerHTML = '<div class="test-item"><div class="test-title">Testing PeerJS Connection Speed...</div></div>';
             
             const tests = [
-                { name: 'Test 1 (Default Cloud)', student: 'student_speed_test_1_' + Date.now(), proctor: 'proctor_speed_test_1_' + Date.now() },
-                { name: 'Test 2 (Default Cloud)', student: 'student_speed_test_2_' + Date.now(), proctor: 'proctor_speed_test_2_' + Date.now() },
-                { name: 'Test 3 (Default Cloud)', student: 'student_speed_test_3_' + Date.now(), proctor: 'proctor_speed_test_3_' + Date.now() }
+                { name: 'Test 1 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_1_' + Date.now(), proctor: 'proctor_speed_test_1_' + Date.now() },
+                { name: 'Test 2 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_2_' + Date.now(), proctor: 'proctor_speed_test_2_' + Date.now() },
+                { name: 'Test 3 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_3_' + Date.now(), proctor: 'proctor_speed_test_3_' + Date.now() }
             ];
 
             const times = [];

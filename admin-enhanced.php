@@ -1041,11 +1041,16 @@ $stats = $statsStmt->fetch();
                 return `
                 <div class="border border-gray-200 rounded-xl p-4 mb-3" data-identifier="${escapeHtml(session.identifier || '')}">
                     <div class="flex items-center justify-between">
-                        <div>
+                        <div class="flex-1">
                             <div class="font-semibold text-gray-900">${escapeHtml(session.name || '')}</div>
                             <div class="text-xs text-gray-600">${escapeHtml(session.identifier || '')}</div>
                         </div>
-                        <div class="text-xs">${statusBadge}</div>
+                        <div class="flex items-center gap-2">
+                            <div class="text-xs">${statusBadge}</div>
+                            <button class="action-menu-btn px-1 py-1 rounded hover:bg-gray-200 text-gray-600 flex-shrink-0" data-identifier="${escapeHtml(session.identifier || '')}" title="Actions">
+                                <i class='bx bx-dots-vertical text-xl'></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="mt-3">
                         <div class="flex items-center gap-2">

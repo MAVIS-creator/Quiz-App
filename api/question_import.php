@@ -103,21 +103,36 @@ try {
         json_out(['error' => 'No valid questions found in file'], 400);
     }
 
+    // Check for existing questions and skip duplicates
+    $checkStmt = $pdo->prepare('SELECT COUNT(*) as cnt FROM questions WHERE prompt = ? AND `group` = ?');
+    $insertCount = 0;
+    $duplicateCount = 0;
+    $skipCount = 0;
+
     // Get next question ID
     $stmt = $pdo->query('SELECT MAX(id) as max_id FROM questions');
     $row = $stmt->fetch();
     $nextId = ($row['max_id'] ?? 0) + 1;
 
     // Insert questions
-    $insertCount = 0;
-    $stmt = $pdo->prepare('
+    $insertStmt = $pdo->prepare('
         INSERT INTO questions (id, category, prompt, option_a, option_b, option_c, option_d, answer, `group`)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ');
 
     foreach ($questions as $q) {
         try {
-            $stmt->execute([
+            // Check if question with same prompt already exists in this group
+            $checkStmt->execute([$q['prompt'], $q['group']]);
+            $exists = $checkStmt->fetch()['cnt'] > 0;
+
+            if ($exists) {
+                $duplicateCount++;
+                continue; // Skip this question
+            }
+
+            // Insert only if not duplicate
+            $insertStmt->execute([
                 $nextId,
                 $q['category'],
                 $q['prompt'],
@@ -131,17 +146,28 @@ try {
             $insertCount++;
             $nextId++;
         } catch (Exception $e) {
-            // Skip duplicates or errors
+            // Log other errors but continue
+            $skipCount++;
             continue;
         }
+    }
+
+    $message = "Imported $insertCount questions for Group $group";
+    if ($duplicateCount > 0) {
+        $message .= " ($duplicateCount duplicates skipped)";
+    }
+    if ($skipCount > 0) {
+        $message .= " ($skipCount errors skipped)";
     }
 
     json_out([
         'success' => true,
         'imported' => $insertCount,
+        'duplicates' => $duplicateCount,
+        'skipped' => $skipCount,
         'total' => count($questions),
         'group' => $group,
-        'message' => "Successfully imported $insertCount questions for Group $group"
+        'message' => $message
     ]);
 
 } catch (Exception $e) {

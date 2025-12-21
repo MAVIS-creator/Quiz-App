@@ -81,17 +81,28 @@ try {
         ], 400);
     }
 
-    // Insert students
+    // Check for existing students before insertion
+    $checkStmt = $pdo->prepare('SELECT COUNT(*) as cnt FROM students WHERE identifier = ? AND group_id = ?');
     $insertCount = 0;
     $duplicateCount = 0;
-    $stmt = $pdo->prepare('
+    $insertStmt = $pdo->prepare('
         INSERT INTO students (identifier, name, phone, group_id)
         VALUES (?, ?, ?, ?)
     ');
 
     foreach ($students as $s) {
         try {
-            $stmt->execute([
+            // Check if student with same identifier already exists in this group
+            $checkStmt->execute([$s['identifier'], $s['group']]);
+            $exists = $checkStmt->fetch()['cnt'] > 0;
+
+            if ($exists) {
+                $duplicateCount++;
+                continue; // Skip this student
+            }
+
+            // Insert only if not duplicate
+            $insertStmt->execute([
                 $s['identifier'],
                 $s['name'],
                 $s['phone'],
@@ -99,9 +110,8 @@ try {
             ]);
             $insertCount++;
         } catch (Exception $e) {
-            if (strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), 'UNIQUE') !== false) {
-                $duplicateCount++;
-            }
+            // Log other errors but continue
+            continue;
         }
     }
 
