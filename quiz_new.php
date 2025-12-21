@@ -882,7 +882,8 @@ foreach ($questionIds as $qid) {
         
         // Smart audio monitoring - only uploads when noise detected or requested
         function startSmartAudioMonitoring() {
-            try {\n                if (!cameraStream) return;
+            try {
+                if (!cameraStream) return;
                 
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 audioAnalyser = audioContext.createAnalyser();

@@ -500,10 +500,32 @@ if ($studentFilter) {
             const studentPeerId = 'student_' + id;
             console.log('Calling student:', studentPeerId);
             
+            // Show connecting status with timeout
+            const connectingAlert = Swal.fire({
+                title: 'Connecting...',
+                text: 'Establishing live video connection to student',
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+                allowOutsideClick: false,
+                allowEscapeKey: false
+            });
+            
+            // 15 second connection timeout
+            let connectionTimeout = setTimeout(() => {
+                if (connectingAlert) Swal.hideLoading();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Timeout',
+                    text: 'Could not connect to student after 15 seconds. They may be offline or WebRTC may be blocked.'
+                });
+            }, 15000);
+            
             try {
                 currentCall = peer.call(studentPeerId, new MediaStream()); // Empty stream
                 
                 currentCall.on('stream', (remoteStream) => {
+                    clearTimeout(connectionTimeout);
                     console.log('Received stream from student');
                     const liveVideo = document.getElementById('liveVideo');
                     liveVideo.srcObject = remoteStream;
@@ -521,10 +543,12 @@ if ($studentFilter) {
                 });
                 
                 currentCall.on('close', () => {
+                    clearTimeout(connectionTimeout);
                     disconnectLiveVideo();
                 });
                 
                 currentCall.on('error', (err) => {
+                    clearTimeout(connectionTimeout);
                     console.error('Call error:', err);
                     Swal.fire({
                         icon: 'error',
@@ -533,6 +557,7 @@ if ($studentFilter) {
                     });
                 });
             } catch (err) {
+                clearTimeout(connectionTimeout);
                 console.error('Failed to call student:', err);
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to connect: ' + err.message });
             }
@@ -613,47 +638,31 @@ if ($studentFilter) {
             }
 
             try {
-                // Load latest preview snapshot
-                const res = await fetch(API+'/snapshot.php?identifier='+encodeURIComponent(id)+'&type=preview');
-                const data = await res.json();
-                
-                if (data.filename && data.url) {
-                    document.getElementById('snapResult').innerHTML = `
-                        <div class="rounded-lg overflow-hidden inline-block shadow-lg">
-                            <img src="${data.url}" class="max-w-2xl max-h-96 object-contain" alt="Student Snapshot"
-                                 onerror="this.onerror=null; document.getElementById('snapResult').innerHTML = '<div class=\'text-center py-8\'><i class=\'bx bx-image-alt text-6xl text-gray-400 mb-4\'></i><p class=\'text-gray-600\'>Snapshot failed to load. Please verify uploads path/filename.</p></div>';">
-                            <div class="bg-gray-100 px-4 py-2 text-sm text-gray-600 flex items-center justify-center">
-                                <i class='bx bx-time mr-2'></i>
-                                ${data.timestamp || 'N/A'}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    document.getElementById('snapResult').innerHTML = `
-                        <div class="text-center py-8">
-                            <i class='bx bx-image-alt text-6xl text-gray-400 mb-4'></i>
-                            <p class="text-gray-600">No snapshot available for this student</p>
-                        </div>
-                    `;
-                }
-
-                // Load recent violation snapshots (limit 6)
-                const violRes = await fetch(API + '/snapshot.php?identifier='+encodeURIComponent(id)+'&type=violation&limit=6');
+                // Load recent violation snapshots (limit 12)
+                const violRes = await fetch(API + '/snapshot.php?identifier='+encodeURIComponent(id)+'&type=violation&limit=12');
                 const violData = await violRes.json();
                 const items = (violData.items || []);
                 const gallery = document.getElementById('violationGallery');
                 const grid = document.getElementById('violationItems');
+                
                 if (items.length > 0) {
                     gallery.classList.remove('hidden');
+                    document.getElementById('snapResult').innerHTML = '';
                     grid.innerHTML = items.map(it => `
-                        <div class="border rounded-lg overflow-hidden bg-white">
-                            <img src="${it.url}" class="w-full h-40 object-cover" alt="Violation Snapshot">
-                            <div class="px-2 py-1 text-xs text-gray-600 flex items-center"><i class='bx bx-time mr-1'></i>${it.timestamp || ''}</div>
+                        <div class="border rounded-lg overflow-hidden bg-white hover:shadow-lg transition cursor-pointer group" onclick="window.open('${it.url}', '_blank')">
+                            <img src="${it.url}" class="w-full h-96 object-cover group-hover:opacity-90 transition" alt="Violation Snapshot">
+                            <div class="px-3 py-2 text-xs text-gray-700 flex items-center font-medium bg-gray-50"><i class='bx bx-time mr-1'></i>${it.timestamp || ''}</div>
                         </div>
                     `).join('');
                 } else {
                     gallery.classList.add('hidden');
                     grid.innerHTML = '';
+                    document.getElementById('snapResult').innerHTML = `
+                        <div class="text-center py-8">
+                            <i class='bx bx-image-alt text-6xl text-gray-400 mb-4'></i>
+                            <p class="text-gray-600">No violation snapshots available for this student</p>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 Swal.fire({

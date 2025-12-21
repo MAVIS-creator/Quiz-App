@@ -5,7 +5,6 @@ require __DIR__ . '/../db.php';
 $useIntervention = file_exists(__DIR__ . '/../vendor/autoload.php');
 if ($useIntervention) {
     require __DIR__ . '/../vendor/autoload.php';
-    use Intervention\Image\ImageManagerStatic as Image;
 }
 
 try {
@@ -71,7 +70,7 @@ try {
             // Use Intervention Image if available for better processing
             if ($useIntervention) {
                 try {
-                    $img = Image::make($image);
+                    $img = \Intervention\Image\ImageManagerStatic::make($image);
                     
                     // Resize to standard width (save disk space)
                     $img->resize(640, null, function ($constraint) {
@@ -119,7 +118,7 @@ try {
                     }
                     
                     // Save with compression
-                    $img->save($filepath, 80); // 80% quality
+                    $img->save($filepath, 95); // 95% quality for better clarity
                     
                 } catch (Exception $e) {
                     // Fallback to basic save if Intervention fails
