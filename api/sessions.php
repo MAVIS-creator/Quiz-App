@@ -27,26 +27,34 @@ try {
         $lastSaved = date('Y-m-d H:i:s');
         $group = intval($data['group'] ?? 1);
 
-        // Check if session exists (by session_id if provided, otherwise by identifier)
+        // Check if session exists (by session_id if provided, or by identifier+group+date)
         $check = null;
         if ($sessionId) {
-            $checkStmt = $pdo->prepare('SELECT id FROM sessions WHERE session_id = ?');
+            $checkStmt = $pdo->prepare('SELECT id, session_id FROM sessions WHERE session_id = ?');
             $checkStmt->execute([$sessionId]);
             $check = $checkStmt->fetch();
         }
         
+        // If session_id not found, check if identifier exists for today
+        if (!$check) {
+            $checkByIdent = $pdo->prepare('SELECT id, session_id FROM sessions WHERE identifier = ? AND `group` = ? AND DATE(created_at) = CURDATE()');
+            $checkByIdent->execute([$identifier, $group]);
+            $check = $checkByIdent->fetch();
+        }
+        
         if ($check) {
-            // Update existing session
-                $upd = $pdo->prepare('UPDATE sessions SET name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE session_id=?');
-                if (!$upd->execute([$name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $sessionId])) {
-                    json_out(['error' => 'Failed to update session: ' . implode(' ', $upd->errorInfo())], 500);
-                }
+            // Update existing session - use the found session_id
+            $existingSessionId = $check['session_id'];
+            $upd = $pdo->prepare('UPDATE sessions SET session_id=?, name=?, submitted=?, last_saved=?, answers_json=?, timings_json=?, question_ids_json=?, violations=?, exam_minutes=? WHERE id=?');
+            if (!$upd->execute([$sessionId ?: $existingSessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $check['id']])) {
+                json_out(['error' => 'Failed to update session: ' . implode(' ', $upd->errorInfo())], 500);
+            }
         } else {
             // Insert new session
-                $ins = $pdo->prepare('INSERT INTO sessions(identifier, session_id, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes, `group`, session_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURDATE())');
-                if (!$ins->execute([$identifier, $sessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $group])) {
-                    json_out(['error' => 'Failed to insert session: ' . implode(' ', $ins->errorInfo())], 500);
-                }
+            $ins = $pdo->prepare('INSERT INTO sessions(identifier, session_id, name, submitted, last_saved, answers_json, timings_json, question_ids_json, violations, exam_minutes, `group`, session_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURDATE())');
+            if (!$ins->execute([$identifier, $sessionId, $name, $submitted, $lastSaved, $answers, $timings, $qids, $violations, $exam, $group])) {
+                json_out(['error' => 'Failed to insert session: ' . implode(' ', $ins->errorInfo())], 500);
+            }
         }
 
         json_out(['ok' => true]);
