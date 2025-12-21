@@ -7,9 +7,9 @@ try {
 
     if ($method === 'GET') {
         $group = intval($_GET['group'] ?? 1);
-        $rows = $pdo->prepare('SELECT * FROM sessions WHERE `group` = ? ORDER BY created_at DESC')
-                    ->execute([$group])
-                    ->fetchAll();
+        $stmt = $pdo->prepare('SELECT * FROM sessions WHERE `group` = ? ORDER BY created_at DESC');
+        $stmt->execute([$group]);
+        $rows = $stmt->fetchAll();
         json_out($rows);
     }
 

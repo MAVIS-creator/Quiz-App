@@ -14,16 +14,15 @@ try {
     $pdo = db();
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // 15-second cache key
+        // 15-second file-based cache
         $cacheKey = 'accuracy_api_' . ($_GET['identifier'] ?? 'all');
+        $cacheFile = sys_get_temp_dir() . '/' . md5($cacheKey) . '.cache';
+        $cacheTime = 15; // 15 seconds
         
-        // Check if result is in output cache (use APC or simple session-based fallback)
-        if (function_exists('apcu_fetch')) {
-            $cached = apcu_fetch($cacheKey);
-            if ($cached !== false) {
-                echo $cached;
-                exit;
-            }
+        // Check if cached result exists and is fresh
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTime) {
+            echo file_get_contents($cacheFile);
+            exit;
         }
         
         // Get all students or specific student
@@ -146,10 +145,8 @@ try {
             $json = json_encode(['students' => $results]);
         }
         
-        // Cache for 15 seconds if available
-        if (function_exists('apcu_store')) {
-            apcu_store($cacheKey, $json, 15);
-        }
+        // Cache for 15 seconds using file-based cache
+        @file_put_contents($cacheFile, $json);
         
         echo $json;
     }
