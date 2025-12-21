@@ -12,6 +12,9 @@ if (!isset($_SESSION['admin_logged_in'])) {
 // Get admin's current group
 $adminGroup = intval($_SESSION['admin_group'] ?? 1);
 
+// Get filter preference (all or only online students)
+$sessionFilter = $_GET['session_filter'] ?? 'all'; // 'all' or 'online'
+
 // Get all active sessions (students who have started the quiz) - FILTERED BY GROUP
 $activeSessions = $pdo->prepare('
     SELECT s.identifier, s.name, s.submitted, s.created_at, s.last_saved, s.violations,
@@ -24,6 +27,16 @@ $activeSessions = $pdo->prepare('
 ');
 $activeSessions->execute([$adminGroup]);
 $activeSessions = $activeSessions->fetchAll();
+
+// Filter for "online" students: not submitted + activity in last 10 minutes
+if ($sessionFilter === 'online') {
+    $activeSessions = array_filter($activeSessions, function($session) {
+        if ($session['submitted']) return false; // Only show students still taking quiz
+        $lastActivity = strtotime($session['last_saved'] ?? $session['created_at']);
+        $now = time();
+        return ($now - $lastActivity) < 600; // Last activity within 10 minutes
+    });
+}
 
 // Get violations sorted by student name - FILTERED BY GROUP AND DATE
 $dateFilter = $_GET['date'] ?? date('Y-m-d'); // default to today
@@ -104,10 +117,23 @@ if ($studentFilter) {
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Active Students Section -->
         <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                <i class='bx bx-user-check text-2xl mr-2 text-blue-600'></i>
-                Active Students (Started Quiz)
-            </h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                    <i class='bx bx-user-check text-2xl mr-2 text-blue-600'></i>
+                    <?php echo $sessionFilter === 'online' ? '🟢 Online Now' : 'All Active Students'; ?> (<?php echo count($activeSessions); ?>)
+                </h2>
+                <div class="flex gap-2">
+                    <a href="proctor.php?session_filter=all" class="px-4 py-2 rounded-lg font-semibold text-sm transition <?php echo $sessionFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'; ?>">
+                        <i class='bx bx-list'></i> All Students
+                    </a>
+                    <a href="proctor.php?session_filter=online" class="px-4 py-2 rounded-lg font-semibold text-sm transition <?php echo $sessionFilter === 'online' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'; ?>">
+                        <i class='bx bx-dot text-green-500'></i> Online Now
+                    </a>
+                    <button onclick="broadcastMessage()" class="px-4 py-2 rounded-lg font-semibold text-sm bg-purple-600 text-white hover:bg-purple-700 transition flex items-center">
+                        <i class='bx bx-broadcast text-lg mr-1'></i> Broadcast Message
+                    </button>
+                </div>
+            </div>
             
             <?php if (empty($activeSessions)): ?>
                 <div class="text-center py-8">
@@ -1010,6 +1036,95 @@ if ($studentFilter) {
                     });
                 }
             }
+        }
+
+        // Broadcast message to all online students
+        async function broadcastMessage() {
+            const { value: message } = await Swal.fire({
+                title: 'Broadcast Message to All Online Students',
+                input: 'textarea',
+                inputLabel: 'Type your message',
+                inputPlaceholder: 'This will be sent to all students currently taking the quiz...',
+                inputAttributes: {
+                    'aria-label': 'Broadcast message'
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Send to All',
+                confirmButtonColor: '#9333ea',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Please enter a message';
+                    }
+                }
+            });
+
+            if (!message) return;
+
+            // Show loading spinner
+            Swal.fire({
+                title: 'Sending Messages...',
+                html: 'Notifying all online students',
+                allowOutsideClick: false,
+                didOpen: async () => {
+                    Swal.showLoading();
+                    
+                    try {
+                        // Get current online students count from page table
+                        const rows = document.querySelectorAll('table tbody tr');
+                        let sentCount = 0;
+                        let failedCount = 0;
+
+                        for (const row of rows) {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length < 2) continue;
+
+                            const matric = cells[1].textContent.trim(); // Matric/ID column
+                            const name = cells[0].textContent.trim();   // Name column
+
+                            if (matric && name) {
+                                try {
+                                    const response = await fetch('api/messages.php', {
+                                        method: 'POST',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify({
+                                            sender: 'admin',
+                                            receiver: matric,
+                                            text: message
+                                        })
+                                    });
+
+                                    const data = await response.json();
+                                    if (data.ok) {
+                                        sentCount++;
+                                    } else {
+                                        failedCount++;
+                                    }
+                                } catch (err) {
+                                    failedCount++;
+                                }
+                                // Small delay to avoid overwhelming server
+                                await new Promise(r => setTimeout(r, 50));
+                            }
+                        }
+
+                        Swal.close();
+                        Swal.fire({
+                            icon: sentCount > 0 ? 'success' : 'error',
+                            title: 'Broadcast Complete',
+                            html: `<p>Messages sent: <strong>${sentCount}</strong></p><p>Failed: <strong>${failedCount}</strong></p>`,
+                            confirmButtonColor: '#9333ea'
+                        });
+                    } catch (error) {
+                        Swal.close();
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Broadcast Error',
+                            text: error.message,
+                            confirmButtonColor: '#dc2626'
+                        });
+                    }
+                }
+            });
         }
 
         // Add Time to Student

@@ -35,20 +35,10 @@ $existingSession = $todaySessionStmt->fetch();
 
 // If there's an existing session today
 if ($existingSession) {
-    // Check if already submitted (block re-entry unless test account)
+    // Check if already submitted (redirect to results instead of blocking)
     if (!$isTestAccount && $existingSession['submitted'] == 1) {
-        echo "<!DOCTYPE html><html><head><title>Access Denied</title><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>";
-        echo "<script>
-            Swal.fire({
-                icon: 'error',
-                title: 'Exam Already Submitted',
-                text: 'You have already submitted an exam today. You can only take the exam once per day. Please try again tomorrow.',
-                confirmButtonColor: '#dc2626',
-                allowOutsideClick: false
-            }).then(() => {
-                window.location.href = 'login.php';
-            });
-        </script></body></html>";
+        // Redirect directly to results page
+        header('Location: result.php');
         exit;
     }
 
