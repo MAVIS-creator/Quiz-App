@@ -30,3 +30,4 @@ quiz.db
 composer.lock
 test_proctoring.html
 test_submit.html
+test_peerjs_video.html

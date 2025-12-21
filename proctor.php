@@ -61,6 +61,7 @@ if ($studentFilter) {
     <title>Proctor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
@@ -313,7 +314,7 @@ if ($studentFilter) {
         <div class="bg-white rounded-2xl p-6 shadow-lg">
             <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <i class='bx bx-camera text-2xl mr-2 text-purple-600'></i>
-                Live Camera Snapshot
+                Live Video & Snapshot Monitoring
             </h2>
             
             <form id="snapForm" class="mb-4">
@@ -326,11 +327,27 @@ if ($studentFilter) {
                     >
                     <button 
                         type="button" 
-                        id="loadSnap"
+                        id="connectLive"
+                        class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-800 text-white font-bold rounded-lg hover:from-green-700 hover:to-green-900 transition flex items-center"
+                    >
+                        <i class='bx bx-video text-xl mr-2'></i>
+                        View Live
+                    </button>
+                    <button 
+                        type="button" 
+                        id="requestSnapshot"
                         class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold rounded-lg hover:from-purple-700 hover:to-purple-900 transition flex items-center"
                     >
                         <i class='bx bx-camera text-xl mr-2'></i>
-                        Load Snapshot
+                        Request Snapshot
+                    </button>
+                    <button 
+                        type="button" 
+                        id="loadSnap"
+                        class="px-6 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800 text-white font-bold rounded-lg hover:from-yellow-700 hover:to-yellow-900 transition flex items-center"
+                    >
+                        <i class='bx bx-image text-xl mr-2'></i>
+                        Load Snapshots
                     </button>
                     <button 
                         type="button" 
@@ -341,17 +358,29 @@ if ($studentFilter) {
                         Request Audio
                     </button>
                 </div>
-                <div class="mt-2">
-                    <label class="flex items-center text-sm text-gray-600">
-                        <input type="checkbox" id="autoRefresh" class="mr-2">
-                        Auto-refresh every 2 seconds
-                    </label>
-                </div>
             </form>
+            
+            <!-- Live Video Container -->
+            <div id="liveVideoContainer" class="hidden mb-4">
+                <div class="bg-gray-900 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-white font-bold flex items-center">
+                            <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></span>
+                            Live Feed: <span id="liveStudentId" class="ml-2 text-green-400"></span>
+                        </h3>
+                        <button id="disconnectLive" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">
+                            <i class='bx bx-x'></i> Disconnect
+                        </button>
+                    </div>
+                    <video id="liveVideo" autoplay playsinline class="w-full max-w-3xl mx-auto rounded border-2 border-green-500"></video>
+                    <p class="text-gray-400 text-xs mt-2 text-center">Real-time peer-to-peer video stream via PeerJS</p>
+                </div>
+            </div>
             
             <div id="snapResult" class="text-center text-gray-500 py-8">
                 <i class='bx bx-image-alt text-6xl mb-4'></i>
-                <p>Enter a student ID and click "Load Snapshot" to view</p>
+                <p>Enter a student ID and click "View Live" for real-time monitoring</p>
+                <p class="text-sm mt-2">Or click "Load Snapshots" to view saved evidence</p>
             </div>
 
             <!-- Violation Snapshots Gallery -->
@@ -405,6 +434,176 @@ if ($studentFilter) {
     <script>
         const API = '/Quiz-App/api';
         let refreshInterval = null;
+        
+        // PeerJS for live video streaming
+        let peer = null;
+        let currentCall = null;
+        let connectedStudentId = null;
+        
+        // Initialize PeerJS
+        function initPeerJS() {
+            try {
+                peer = new Peer('proctor_' + Date.now(), {
+                    host: '0.peerjs.com',
+                    secure: true,
+                    port: 443,
+                    path: '/'
+                });
+                
+                peer.on('open', (id) => {
+                    console.log('Proctor PeerJS connected:', id);
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('PeerJS error:', err);
+                });
+            } catch (e) {
+                console.error('Failed to initialize PeerJS:', e);
+            }
+        }
+        
+        // Initialize on page load
+        initPeerJS();
+        
+        // Connect to student's live video
+        document.getElementById('connectLive').onclick = async () => {
+            const id = document.getElementById('snapId').value.trim();
+            if (!id) {
+                Swal.fire({ icon: 'warning', title: 'Missing ID', text: 'Please enter a student ID' });
+                return;
+            }
+            
+            // Check if student is online
+            try {
+                const checkRes = await fetch(`${API}/sessions.php?identifier=${encodeURIComponent(id)}`);
+                const checkData = await checkRes.json();
+                
+                if (!checkData || checkData.submitted || checkData.cancelled) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'User Not Online', 
+                        text: 'This student is not currently taking the quiz.' 
+                    });
+                    return;
+                }
+            } catch (err) {
+                console.error('Status check failed:', err);
+            }
+            
+            if (!peer) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'PeerJS not initialized' });
+                return;
+            }
+            
+            // Disconnect existing call if any
+            if (currentCall) {
+                currentCall.close();
+            }
+            
+            // Call the student
+            const studentPeerId = 'student_' + id;
+            console.log('Calling student:', studentPeerId);
+            
+            try {
+                currentCall = peer.call(studentPeerId, new MediaStream()); // Empty stream
+                
+                currentCall.on('stream', (remoteStream) => {
+                    console.log('Received stream from student');
+                    const liveVideo = document.getElementById('liveVideo');
+                    liveVideo.srcObject = remoteStream;
+                    document.getElementById('liveVideoContainer').classList.remove('hidden');
+                    document.getElementById('liveStudentId').textContent = id;
+                    connectedStudentId = id;
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Connected',
+                        text: 'Now viewing student live camera',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                });
+                
+                currentCall.on('close', () => {
+                    disconnectLiveVideo();
+                });
+                
+                currentCall.on('error', (err) => {
+                    console.error('Call error:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Failed',
+                        text: 'Could not connect to student. They may not be online or PeerJS may be blocked.'
+                    });
+                });
+            } catch (err) {
+                console.error('Failed to call student:', err);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to connect: ' + err.message });
+            }
+        };
+        
+        // Disconnect live video
+        document.getElementById('disconnectLive').onclick = disconnectLiveVideo;
+        
+        function disconnectLiveVideo() {
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
+            }
+            const liveVideo = document.getElementById('liveVideo');
+            if (liveVideo.srcObject) {
+                liveVideo.srcObject.getTracks().forEach(track => track.stop());
+                liveVideo.srcObject = null;
+            }
+            document.getElementById('liveVideoContainer').classList.add('hidden');
+            connectedStudentId = null;
+        }
+        
+        // Request snapshot from student
+        document.getElementById('requestSnapshot').onclick = async () => {
+            const id = document.getElementById('snapId').value.trim();
+            if (!id) {
+                Swal.fire({ icon: 'warning', title: 'Missing ID', text: 'Please enter a student ID' });
+                return;
+            }
+            
+            try {
+                // Check if student is online
+                const checkRes = await fetch(`${API}/sessions.php?identifier=${encodeURIComponent(id)}`);
+                const checkData = await checkRes.json();
+                
+                if (!checkData || checkData.submitted || checkData.cancelled) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'User Not Online', 
+                        text: 'This student is not currently taking the quiz.' 
+                    });
+                    return;
+                }
+                
+                // Send snapshot request via messages
+                const response = await fetch(API + '/messages.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sender: 'admin', receiver: id, text: '[REQUEST_SNAPSHOT] Please capture a snapshot.' })
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'Request Sent', 
+                        text: 'Snapshot will be captured shortly. Refresh to view.',
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    throw new Error(data.error || 'Failed');
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to request snapshot.' });
+            }
+        };
 
         document.getElementById('loadSnap').onclick = async () => {
             const id = document.getElementById('snapId').value.trim();
@@ -466,21 +665,6 @@ if ($studentFilter) {
                     title: 'Error',
                     text: 'Failed to load snapshot'
                 });
-            }
-        };
-
-        document.getElementById('autoRefresh').onchange = (e) => {
-            if (e.target.checked) {
-                refreshInterval = setInterval(() => {
-                    if (document.getElementById('snapId').value.trim()) {
-                        document.getElementById('loadSnap').click();
-                    }
-                }, 2000);
-            } else {
-                if (refreshInterval) {
-                    clearInterval(refreshInterval);
-                    refreshInterval = null;
-                }
             }
         };
 

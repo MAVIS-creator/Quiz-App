@@ -158,6 +158,7 @@ foreach ($questionIds as $qid) {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         @keyframes fadeIn {
@@ -514,6 +515,17 @@ foreach ($questionIds as $qid) {
         let faceApiModelsLoaded = false;
         let lastFaceDetectionTime = 0;
         const FACE_DETECTION_INTERVAL = 3000; // 3 seconds
+        
+        // PeerJS for live video streaming
+        let peer = null;
+        let currentCall = null;
+        
+        // Audio monitoring thresholds
+        const NOISE_THRESHOLD_MEDIUM = 0.3; // 30% volume
+        const NOISE_THRESHOLD_LOUD = 0.6; // 60% volume
+        let lastNoiseLevel = 0;
+        let lastAudioUpload = 0;
+        const AUDIO_UPLOAD_COOLDOWN = 10000; // 10 seconds between uploads
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -770,18 +782,54 @@ foreach ($questionIds as $qid) {
                 video.srcObject = cameraStream;
                 video.muted = true; // MUTE video element so audio doesn't play
 
+                // Initialize PeerJS for live streaming
+                initPeerConnection();
+
                 // Load face-api.js models
                 await loadFaceApiModels();
 
-                // Start background audio recording
-                startBackgroundRecording();
+                // Start smart audio monitoring (not constant recording)
+                startSmartAudioMonitoring();
 
-                // Smart snapshot with real face detection
+                // Smart snapshot with real face detection (only on violations)
                 setInterval(checkForMultipleFaces, FACE_DETECTION_INTERVAL);
             } catch (e) {
                 console.warn('Camera access denied:', e);
                 document.getElementById('cameraStatus').innerHTML =
                     '<i class="bx bx-video-off mr-1"></i><span class="text-red-600">Camera Disabled</span>';
+            }
+        }
+        
+        // Initialize PeerJS connection for live video streaming
+        function initPeerConnection() {
+            try {
+                // Create peer with student identifier as ID (official PeerJS cloud)
+                peer = new Peer('student_' + identifier, {
+                    host: '0.peerjs.com',
+                    secure: true,
+                    port: 443,
+                    path: '/'
+                });
+                
+                peer.on('open', (id) => {
+                    console.log('PeerJS connected with ID:', id);
+                });
+                
+                // Answer incoming calls from proctor
+                peer.on('call', (call) => {
+                    console.log('Receiving call from proctor');
+                    call.answer(cameraStream); // Answer with camera stream
+                    currentCall = call;
+                    
+                    // Show notification to student
+                    showNotification('Proctor is viewing your camera', 'info');
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('PeerJS error:', err);
+                });
+            } catch (e) {
+                console.error('PeerJS initialization failed:', e);
             }
         }
 
@@ -833,6 +881,87 @@ foreach ($questionIds as $qid) {
 
             } catch (e) {
                 console.warn('Audio recording failed:', e);
+            }
+        }
+        
+        // Smart audio monitoring - only uploads when noise detected or requested
+        function startSmartAudioMonitoring() {
+            try {\n                if (!cameraStream) return;
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioAnalyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(cameraStream);
+                source.connect(audioAnalyser);
+                audioAnalyser.fftSize = 256;
+                
+                const bufferLength = audioAnalyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                // Monitor audio levels
+                function checkAudioLevel() {
+                    audioAnalyser.getByteFrequencyData(dataArray);
+                    
+                    // Calculate average volume
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    const average = sum / bufferLength / 255; // Normalize to 0-1
+                    lastNoiseLevel = average;
+                    
+                    // Only record if medium/loud noise detected
+                    const now = Date.now();
+                    if ((average > NOISE_THRESHOLD_MEDIUM) && (now - lastAudioUpload > AUDIO_UPLOAD_COOLDOWN)) {
+                        console.log('Noise detected:', (average * 100).toFixed(1) + '%');
+                        captureAndUploadAudio('noise_detected');
+                        lastAudioUpload = now;
+                    }
+                    
+                    requestAnimationFrame(checkAudioLevel);
+                }
+                
+                checkAudioLevel();
+            } catch (e) {
+                console.error('Smart audio monitoring failed:', e);
+            }
+        }
+        
+        // Capture and upload audio clip
+        async function captureAndUploadAudio(reason = 'manual') {
+            try {
+                if (!cameraStream) return;
+                
+                const audioStream = new MediaStream(cameraStream.getAudioTracks());
+                const recorder = new MediaRecorder(audioStream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                const chunks = [];
+                recorder.ondataavailable = (e) => chunks.push(e.data);
+                
+                recorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        await fetch(`${API}/audio_save.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                identifier: identifier,
+                                audio: reader.result,
+                                duration: 5,
+                                reason: reason
+                            })
+                        });
+                        console.log('Audio uploaded:', reason);
+                    };
+                    reader.readAsDataURL(blob);
+                };
+                
+                recorder.start();
+                setTimeout(() => recorder.stop(), 5000); // 5 second clip
+            } catch (e) {
+                console.error('Audio capture failed:', e);
             }
         }
 
@@ -894,9 +1023,10 @@ foreach ($questionIds as $qid) {
 
                     faceCount = detections.length;
 
-                    // Capture snapshot if:
+                    // Capture snapshot ONLY if:
                     // 1. No face detected (student may have left)
                     // 2. Multiple faces detected (potential cheating)
+                    // NO MORE random preview captures - only violations!
                     if (faceCount === 0) {
                         console.warn('No face detected - capturing evidence');
                         shouldCapture = true;
@@ -905,22 +1035,18 @@ foreach ($questionIds as $qid) {
                         console.warn(`Multiple faces detected (${faceCount}) - capturing evidence`);
                         shouldCapture = true;
                         logViolation('multiple_faces', `${faceCount} faces detected in camera view`);
-                    } else {
-                        // Exactly 1 face - normal, capture preview occasionally (every 10 seconds)
-                        if (Math.random() < 0.33) { // 33% chance = ~every 9 seconds
-                            shouldCapture = true;
-                        }
                     }
+                    // If exactly 1 face: DO NOTHING (live video stream available via PeerJS)
                 } catch (e) {
                     console.error('Face detection failed:', e);
-                    // Fallback: capture preview occasionally
-                    if (Math.random() < 0.33) {
-                        shouldCapture = true;
-                    }
+                    // No fallback capture - rely on PeerJS live stream
                 }
             } else {
-                // Fallback mode without face-api: capture occasionally
-                shouldCapture = true;
+                // Fallback mode without face-api: Don't capture constantly
+                // Only capture if random check (very low frequency)
+                if (Math.random() < 0.05) { // 5% chance = ~every 60 seconds
+                    shouldCapture = true;
+                }
             }
 
             // Send snapshot to server
@@ -1108,10 +1234,22 @@ foreach ($questionIds as $qid) {
                             if (!seenMessageKeys.has(key) && String(msg.sender).toLowerCase() === 'admin') {
                                 seenMessageKeys.add(key);
                                 newCount++;
+                                
+                                // Handle admin commands
+                                const msgText = (msg.text || '').toUpperCase();
+                                
                                 // If admin requested audio, record on demand
-                                if ((msg.text || '').toUpperCase().includes('REQUEST_AUDIO')) {
-                                    requestAudioClip();
+                                if (msgText.includes('REQUEST_AUDIO') || msgText.includes('[REQUEST_AUDIO]')) {
+                                    console.log('Admin requested audio');
+                                    captureAndUploadAudio('admin_request');
                                 }
+                                
+                                // If admin requested snapshot, capture on demand
+                                if (msgText.includes('REQUEST_SNAPSHOT') || msgText.includes('[REQUEST_SNAPSHOT]')) {
+                                    console.log('Admin requested snapshot');
+                                    sendViolationSnapshot();
+                                }
+                                
                                 // Append to feed
                                 const item = document.createElement('div');
                                 item.className = 'bg-blue-50 border border-blue-200 rounded p-2';
