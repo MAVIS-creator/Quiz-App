@@ -22,9 +22,9 @@ if (!isset($_SESSION['admin_logged_in'])) {
 $adminGroup = $_SESSION['admin_group'] ?? 1;
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
-// 15-second cache for dashboard queries
+// 30-second cache for dashboard queries
 $cacheKey = 'admin_dashboard_' . $adminGroup . '_' . ($_GET['filter'] ?? 'all') . '_' . ($_GET['date'] ?? date('Y-m-d'));
-$cacheTTL = 15; // 15 seconds
+$cacheTTL = 30; // 30 seconds
 $useCache = false;
 $config = $cfg = null;
 $sessions = [];
@@ -1692,7 +1692,7 @@ if (!$useCache) {
             }
         }
 
-        setInterval(pollDashboard, 15000); // 15 seconds (matches cache TTL)
+        setInterval(pollDashboard, 30000); // 30 seconds
         pollDashboard();
     </script>
 </body>

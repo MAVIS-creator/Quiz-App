@@ -14,10 +14,10 @@ try {
     $pdo = db();
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // 15-second file-based cache
+        // 30-second file-based cache
         $cacheKey = 'accuracy_api_' . ($_GET['identifier'] ?? 'all');
         $cacheFile = sys_get_temp_dir() . '/' . md5($cacheKey) . '.cache';
-        $cacheTime = 15; // 15 seconds
+        $cacheTime = 30; // 30 seconds
         
         // Check if cached result exists and is fresh
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTime) {
@@ -145,7 +145,7 @@ try {
             $json = json_encode(['students' => $results]);
         }
         
-        // Cache for 15 seconds using file-based cache
+        // Cache for 30 seconds using file-based cache
         @file_put_contents($cacheFile, $json);
         
         echo $json;

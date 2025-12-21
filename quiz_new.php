@@ -505,7 +505,7 @@ foreach ($questionIds as $qid) {
         let isResuming = <?php echo $isResuming ? 'true' : 'false'; ?>;
         let faceApiModelsLoaded = false;
         let lastFaceDetectionTime = 0;
-        const FACE_DETECTION_INTERVAL = 3000; // 3 seconds
+        const FACE_DETECTION_INTERVAL = 10000; // 10 seconds
         
         // PeerJS for live video streaming
         let peer = null;
@@ -1154,7 +1154,7 @@ foreach ($questionIds as $qid) {
                             }, 7000); // 7 second clip
                         }
                     }
-                }, 10000); // Check audio every 10 seconds (reduced from 1s)
+                }, 30000); // Check audio every 30 seconds
             } catch (e) {
                 console.warn('Audio monitoring failed:', e);
             }
@@ -1275,7 +1275,7 @@ foreach ($questionIds as $qid) {
                 } catch (e) {
                     console.error('Message check failed:', e);
                 }
-            }, 10000); // Check messages every 10 seconds (reduced from 5s)
+            }, 30000); // Check messages every 30 seconds
         }
 
         // Record an on-demand audio clip upon admin request
