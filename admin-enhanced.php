@@ -4,7 +4,7 @@
  * Replaces the old admin.php with enhanced UI and filtering
  */
 session_start();
-require __DIR__ . '/db.php';
+require_once 'db.php';
 $pdo = db();
 
 // Check authentication
@@ -22,55 +22,87 @@ if (!isset($_SESSION['admin_logged_in'])) {
 $adminGroup = $_SESSION['admin_group'] ?? 1;
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
-// Get config
-$cfgStmt = $pdo->prepare('SELECT exam_minutes, question_count FROM config WHERE id=?');
-$cfgStmt->execute([$adminGroup]);
-$cfg = $cfgStmt->fetch();
-if (!$cfg) {
-    $cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch() ?: ['exam_minutes' => 60, 'question_count' => 40];
+// 15-second cache for dashboard queries
+$cacheKey = 'admin_dashboard_' . $adminGroup . '_' . ($_GET['filter'] ?? 'all') . '_' . ($_GET['date'] ?? date('Y-m-d'));
+$cacheTTL = 15; // 15 seconds
+$useCache = false;
+$config = $cfg = null;
+$sessions = [];
+$violations = [];
+$stats = null;
+
+// Check if cache exists and is valid
+if (isset($_SESSION[$cacheKey]) && isset($_SESSION[$cacheKey . '_time'])) {
+    if (time() - $_SESSION[$cacheKey . '_time'] < $cacheTTL) {
+        $useCache = true;
+        $cfg = $_SESSION[$cacheKey]['cfg'];
+        $sessions = $_SESSION[$cacheKey]['sessions'];
+        $violations = $_SESSION[$cacheKey]['violations'];
+        $stats = $_SESSION[$cacheKey]['stats'];
+    }
 }
 
-// Get sessions with filtering
-$filter = $_GET['filter'] ?? 'all'; // all, today, submitted, in-progress, booted
-$filterDate = $_GET['date'] ?? date('Y-m-d');
+// If cache miss, fetch from database
+if (!$useCache) {
+    // Get config
+    $cfgStmt = $pdo->prepare('SELECT exam_minutes, question_count FROM config WHERE id=?');
+    $cfgStmt->execute([$adminGroup]);
+    $cfg = $cfgStmt->fetch();
+    if (!$cfg) {
+        $cfg = $pdo->query('SELECT exam_minutes, question_count FROM config WHERE id=1')->fetch() ?: ['exam_minutes' => 60, 'question_count' => 40];
+    }
 
-$query = 'SELECT * FROM sessions WHERE `group` = ?';
-$params = [$adminGroup];
+    // Get sessions with filtering
+    $filter = $_GET['filter'] ?? 'all'; // all, today, submitted, in-progress, booted
+    $filterDate = $_GET['date'] ?? date('Y-m-d');
 
-switch ($filter) {
-    case 'today':
-        $query .= ' AND DATE(created_at) = ?';
-        $params[] = date('Y-m-d');
-        break;
-    case 'submitted':
-        $query .= ' AND submitted = 1';
-        break;
-    case 'in-progress':
-        $query .= ' AND submitted = 0';
-        break;
-    case 'booted':
-        $query .= ' AND status = "booted"';
-        break;
-    case 'date':
-        $query .= ' AND DATE(created_at) = ?';
-        $params[] = $filterDate;
-        break;
+    $query = 'SELECT * FROM sessions WHERE `group` = ?';
+    $params = [$adminGroup];
+
+    switch ($filter) {
+        case 'today':
+            $query .= ' AND DATE(created_at) = ?';
+            $params[] = date('Y-m-d');
+            break;
+        case 'submitted':
+            $query .= ' AND submitted = 1';
+            break;
+        case 'in-progress':
+            $query .= ' AND submitted = 0';
+            break;
+        case 'booted':
+            $query .= ' AND status = "booted"';
+            break;
+        case 'date':
+            $query .= ' AND DATE(created_at) = ?';
+            $params[] = $filterDate;
+            break;
+    }
+
+    $query .= ' ORDER BY created_at DESC';
+    $sessStmt = $pdo->prepare($query);
+    $sessStmt->execute($params);
+    $sessions = $sessStmt->fetchAll();
+
+    // Get violations
+    $violStmt = $pdo->prepare('SELECT v.identifier, v.type, v.reason, COUNT(*) as count FROM violations v JOIN sessions s ON v.identifier = s.identifier WHERE s.`group` = ? GROUP BY v.identifier, v.type ORDER BY v.identifier');
+    $violStmt->execute([$adminGroup]);
+    $violations = $violStmt->fetchAll();
+
+    // Get student stats
+    $statsStmt = $pdo->prepare('SELECT COUNT(DISTINCT identifier) as total, SUM(CASE WHEN submitted = 1 THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN violations > 0 THEN 1 ELSE 0 END) as flagged FROM sessions WHERE `group` = ?');
+    $statsStmt->execute([$adminGroup]);
+    $stats = $statsStmt->fetch();
+
+    // Store in cache
+    $_SESSION[$cacheKey] = [
+        'cfg' => $cfg,
+        'sessions' => $sessions,
+        'violations' => $violations,
+        'stats' => $stats
+    ];
+    $_SESSION[$cacheKey . '_time'] = time();
 }
-
-$query .= ' ORDER BY created_at DESC';
-$sessStmt = $pdo->prepare($query);
-$sessStmt->execute($params);
-$sessions = $sessStmt->fetchAll();
-
-// Get violations
-$violStmt = $pdo->prepare('SELECT v.identifier, v.type, v.reason, COUNT(*) as count FROM violations v JOIN sessions s ON v.identifier = s.identifier WHERE s.`group` = ? GROUP BY v.identifier, v.type ORDER BY v.identifier');
-$violStmt->execute([$adminGroup]);
-$violations = $violStmt->fetchAll();
-
-// Get student stats
-$statsStmt = $pdo->prepare('SELECT COUNT(DISTINCT identifier) as total, SUM(CASE WHEN submitted = 1 THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN violations > 0 THEN 1 ELSE 0 END) as flagged FROM sessions WHERE `group` = ?');
-$statsStmt->execute([$adminGroup]);
-$stats = $statsStmt->fetch();
 
 ?>
 <!DOCTYPE html>
@@ -1079,9 +1111,10 @@ $stats = $statsStmt->fetch();
 
         async function pollDashboard() {
             try {
+                const adminGroup = <?php echo $adminGroup; ?>;
                 const [accuracyRes, sessionsRes] = await Promise.all([
                     fetch(API + '/accuracy.php'),
-                    fetch(API + '/sessions.php')
+                    fetch(API + '/sessions.php?group=' + adminGroup)
                 ]);
 
                 if (!accuracyRes.ok || !sessionsRes.ok) throw new Error('Network error');
@@ -1659,7 +1692,7 @@ $stats = $statsStmt->fetch();
             }
         }
 
-        setInterval(pollDashboard, 5000);
+        setInterval(pollDashboard, 15000); // 15 seconds (matches cache TTL)
         pollDashboard();
     </script>
 </body>

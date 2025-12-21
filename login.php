@@ -1,6 +1,6 @@
 <?php
 session_start();
-require __DIR__ . '/db.php';
+require_once 'db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw = $_POST['matric_no'] ?? '';

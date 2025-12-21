@@ -1,6 +1,6 @@
 <?php
 session_start();
-require __DIR__ . '/db.php';
+require_once 'db.php';
 $pdo = db();
 
 // Check authentication
@@ -935,7 +935,7 @@ $violations = $violStmt->fetchAll();
             }
         };
 
-        setInterval(pollDashboard, 5000);
+        setInterval(pollDashboard, 15000); // 15 seconds
         pollDashboard();
     </script>
 </body>

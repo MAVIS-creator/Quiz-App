@@ -2,6 +2,7 @@
 /**
  * API: Calculate student accuracy and performance metrics
  * Returns detailed statistics about student's quiz performance
+ * Includes 15-second caching to prevent overload
  */
 
 require_once '../db.php';
@@ -13,6 +14,18 @@ try {
     $pdo = db();
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // 15-second cache key
+        $cacheKey = 'accuracy_api_' . ($_GET['identifier'] ?? 'all');
+        
+        // Check if result is in output cache (use APC or simple session-based fallback)
+        if (function_exists('apcu_fetch')) {
+            $cached = apcu_fetch($cacheKey);
+            if ($cached !== false) {
+                echo $cached;
+                exit;
+            }
+        }
+        
         // Get all students or specific student
         $identifier = $_GET['identifier'] ?? null;
         
@@ -126,11 +139,19 @@ try {
             ];
         }
         
+        $json = '';
         if ($identifier) {
-            json_out($results[0] ?? ['error' => 'Student not found']);
+            $json = json_encode($results[0] ?? ['error' => 'Student not found']);
         } else {
-            json_out(['students' => $results]);
+            $json = json_encode(['students' => $results]);
         }
+        
+        // Cache for 15 seconds if available
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $json, 15);
+        }
+        
+        echo $json;
     }
     
 } catch (Exception $e) {

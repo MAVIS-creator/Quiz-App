@@ -1,12 +1,15 @@
 <?php
-require __DIR__ . '/../db.php';
+require_once __DIR__ . '/../db.php';
 
 try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'];
 
     if ($method === 'GET') {
-        $rows = $pdo->query('SELECT * FROM sessions')->fetchAll();
+        $group = intval($_GET['group'] ?? 1);
+        $rows = $pdo->prepare('SELECT * FROM sessions WHERE `group` = ? ORDER BY created_at DESC')
+                    ->execute([$group])
+                    ->fetchAll();
         json_out($rows);
     }
 

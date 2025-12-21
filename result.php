@@ -7,7 +7,7 @@ if (!isset($_SESSION['student_matric'])) {
     exit;
 }
 
-require __DIR__ . '/db.php';
+require_once 'db.php';
 $pdo = db();
 
 $studentMatric = $_SESSION['student_matric'];

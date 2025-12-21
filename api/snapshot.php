@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../db.php';
+require_once __DIR__ . '/../db.php';
 
 // Check if Intervention Image is available
 $useIntervention = file_exists(__DIR__ . '/../vendor/autoload.php');

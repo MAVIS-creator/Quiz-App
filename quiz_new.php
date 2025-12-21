@@ -7,7 +7,7 @@ if (!isset($_SESSION['student_matric'])) {
     exit;
 }
 
-require __DIR__ . '/db.php';
+require_once 'db.php';
 $pdo = db();
 
 $studentName = $_SESSION['student_name'];
@@ -651,7 +651,7 @@ foreach ($questionIds as $qid) {
             document.getElementById('answeredCount').textContent = answeredQuestions.size;
         }
 
-        // Auto-save every 5 seconds
+        // Auto-save every 30 seconds (reduced from 5s to prevent query overload)
         function autoSave() {
             setInterval(async function() {
                 if (Object.keys(answers).length > 0) {
@@ -676,10 +676,10 @@ foreach ($questionIds as $qid) {
                         console.error('Auto-save failed:', e);
                     }
                 }
-            }, 5000);
+            }, 30000);
         }
 
-        // Poll for status changes and time adjustments every 5 seconds
+        // Poll for status changes and time adjustments every 30 seconds (reduced from 5s to prevent query overload)
         function pollStatusAdjustments() {
             setInterval(async function() {
                 try {
@@ -1154,7 +1154,7 @@ foreach ($questionIds as $qid) {
                             }, 7000); // 7 second clip
                         }
                     }
-                }, 1000);
+                }, 10000); // Check audio every 10 seconds (reduced from 1s)
             } catch (e) {
                 console.warn('Audio monitoring failed:', e);
             }
@@ -1275,7 +1275,7 @@ foreach ($questionIds as $qid) {
                 } catch (e) {
                     console.error('Message check failed:', e);
                 }
-            }, 5000);
+            }, 10000); // Check messages every 10 seconds (reduced from 5s)
         }
 
         // Record an on-demand audio clip upon admin request

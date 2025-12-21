@@ -1,6 +1,6 @@
 <?php
 session_start();
-require __DIR__ . '/db.php';
+require_once 'db.php';
 $pdo = db();
 
 // Check if admin is logged in
