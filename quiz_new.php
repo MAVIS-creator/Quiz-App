@@ -160,6 +160,7 @@ foreach ($questionIds as $qid) {
     <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <style>
         @keyframes fadeIn {
             from {
@@ -803,12 +804,12 @@ foreach ($questionIds as $qid) {
         // Initialize PeerJS connection for live video streaming
         function initPeerConnection() {
             try {
-                // Create peer with local PeerJS server and STUN servers for better connectivity
+                // Create peer using PeerJS Cloud (production-safe, HTTPS/443)
                 peer = new Peer('student_' + identifier, {
-                    host: '192.168.1.185',  // Your computer IP (verified: 192.168.1.185)
-                    port: 9000,
+                    host: '0.peerjs.com',
+                    port: 443,
                     path: '/',
-                    secure: false,
+                    secure: true,
                     config: {
                         iceServers: [
                             { urls: ['stun:stun.l.google.com:19302'] },

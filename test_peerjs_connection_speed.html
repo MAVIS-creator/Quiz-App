@@ -44,12 +44,12 @@
                 };
 
                 try {
-                    // Create student peer using local PeerJS server
+                    // Create student peer using PeerJS Cloud (HTTPS/443)
                     const studentPeer = new Peer(studentId, {
-                        host: '192.168.1.185',
-                        port: 9000,
+                        host: '0.peerjs.com',
+                        port: 443,
                         path: '/',
-                        secure: false,
+                        secure: true,
                         config: {
                             iceServers: [
                                 { urls: ['stun:stun.l.google.com:19302'] },
@@ -83,13 +83,13 @@
                         throw new Error('Student peer failed to connect');
                     }
 
-                    // Create proctor peer using local PeerJS server and call student
+                    // Create proctor peer using PeerJS Cloud and call student
                     const proctorStartTime = Date.now();
                     const proctorPeer = new Peer(proctorId, {
-                        host: '192.168.1.185',
-                        port: 9000,
+                        host: '0.peerjs.com',
+                        port: 443,
                         path: '/',
-                        secure: false,
+                        secure: true,
                         config: {
                             iceServers: [
                                 { urls: ['stun:stun.l.google.com:19302'] },
@@ -111,7 +111,7 @@
 
                         // Make call
                         const callStartTime = Date.now();
-                        const call = proctorPeer.call(studentId, new MediaStream());
+                        const call = proctorPeer.call(studentId);
                         
                         call.on('stream', (remoteStream) => {
                             if (!callEstablished) {
@@ -181,9 +181,9 @@
             results.innerHTML = '<div class="test-item"><div class="test-title">Testing PeerJS Connection Speed...</div></div>';
             
             const tests = [
-                { name: 'Test 1 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_1_' + Date.now(), proctor: 'proctor_speed_test_1_' + Date.now() },
-                { name: 'Test 2 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_2_' + Date.now(), proctor: 'proctor_speed_test_2_' + Date.now() },
-                { name: 'Test 3 (Local Server 192.168.1.185:9000)', student: 'student_speed_test_3_' + Date.now(), proctor: 'proctor_speed_test_3_' + Date.now() }
+                { name: 'Test 1 (PeerJS Cloud HTTPS/443)', student: 'student_speed_test_1_' + Date.now(), proctor: 'proctor_speed_test_1_' + Date.now() },
+                { name: 'Test 2 (PeerJS Cloud HTTPS/443)', student: 'student_speed_test_2_' + Date.now(), proctor: 'proctor_speed_test_2_' + Date.now() },
+                { name: 'Test 3 (PeerJS Cloud HTTPS/443)', student: 'student_speed_test_3_' + Date.now(), proctor: 'proctor_speed_test_3_' + Date.now() }
             ];
 
             const times = [];

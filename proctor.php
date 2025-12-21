@@ -63,6 +63,7 @@ if ($studentFilter) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <style>
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .gradient-text {
@@ -443,12 +444,12 @@ if ($studentFilter) {
         // Initialize PeerJS
         function initPeerJS() {
             try {
-                // Use local PeerJS server with multiple STUN servers for better connectivity
+                // Use PeerJS Cloud (HTTPS/443) with multiple STUN servers for production
                 peer = new Peer('proctor_' + Date.now(), {
-                    host: '192.168.1.185',  // Your computer IP (verified: 192.168.1.185)
-                    port: 9000,
+                    host: '0.peerjs.com',
+                    port: 443,
                     path: '/',
-                    secure: false,
+                    secure: true,
                     config: {
                         iceServers: [
                             { urls: ['stun:stun.l.google.com:19302'] },

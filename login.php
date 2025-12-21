@@ -56,6 +56,7 @@ if (isset($_SESSION['student_matric'])) {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <style>
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-20px); }
