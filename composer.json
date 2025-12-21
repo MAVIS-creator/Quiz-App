@@ -1,0 +1,14 @@
+{
+    "name": "mavis-creator/quiz-app",
+    "description": "Online Quiz Application with Proctoring",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "intervention/image": "^2.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}

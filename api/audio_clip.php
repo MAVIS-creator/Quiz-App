@@ -5,15 +5,42 @@ try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'];
 
+    // Detect storage mode (filename vs audio_data)
+    $hasFilename = $pdo->query("SHOW COLUMNS FROM audio_clips LIKE 'filename'")->fetch();
+    $hasDuration = $pdo->query("SHOW COLUMNS FROM audio_clips LIKE 'duration'")->fetch();
+
     if ($method === 'GET') {
         $identifier = $_GET['identifier'] ?? null;
         if ($identifier) {
-            $stmt = $pdo->prepare('SELECT * FROM audio_clips WHERE identifier=? ORDER BY timestamp DESC');
+            if ($hasFilename) {
+                $stmt = $pdo->prepare('SELECT id, identifier, filename, duration, created_at FROM audio_clips WHERE identifier=? ORDER BY created_at DESC LIMIT 10');
+            } else {
+                $stmt = $pdo->prepare('SELECT * FROM audio_clips WHERE identifier=? ORDER BY timestamp DESC LIMIT 10');
+            }
             $stmt->execute([$identifier]);
-            json_out($stmt->fetchAll());
+            $rows = $stmt->fetchAll();
+            
+            // Build URLs for file-based storage
+            foreach ($rows as &$row) {
+                if ($hasFilename && isset($row['filename'])) {
+                    $path = ltrim($row['filename'], '/');
+                    $row['url'] = '/Quiz-App/uploads/' . $path;
+                }
+            }
+            json_out(['clips' => $rows]);
         } else {
-            $rows = $pdo->query('SELECT * FROM audio_clips ORDER BY timestamp DESC')->fetchAll();
-            json_out($rows);
+            if ($hasFilename) {
+                $rows = $pdo->query('SELECT id, identifier, filename, duration, created_at FROM audio_clips ORDER BY created_at DESC LIMIT 50')->fetchAll();
+                foreach ($rows as &$row) {
+                    if (isset($row['filename'])) {
+                        $path = ltrim($row['filename'], '/');
+                        $row['url'] = '/Quiz-App/uploads/' . $path;
+                    }
+                }
+            } else {
+                $rows = $pdo->query('SELECT * FROM audio_clips ORDER BY timestamp DESC LIMIT 50')->fetchAll();
+            }
+            json_out(['clips' => $rows]);
         }
     }
 
@@ -29,9 +56,14 @@ try {
             json_out(['error' => 'Missing required fields'], 400);
         }
 
-        $stmt = $pdo->prepare('INSERT INTO audio_clips (identifier, audio_data, timestamp) VALUES (?, ?, ?)');
-        $stmt->execute([$id, $audio, $timestamp]);
-        json_out(['ok' => true, 'id' => $pdo->lastInsertId()]);
+        // If using old schema with audio_data column
+        if (!$hasFilename) {
+            $stmt = $pdo->prepare('INSERT INTO audio_clips (identifier, audio_data, timestamp) VALUES (?, ?, ?)');
+            $stmt->execute([$id, $audio, $timestamp]);
+            json_out(['ok' => true, 'id' => $pdo->lastInsertId()]);
+        }
+
+        json_out(['error' => 'Use audio_save.php for file-based storage'], 400);
     }
 
     json_out(['error' => 'Method not allowed'], 405);

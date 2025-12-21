@@ -26,3 +26,7 @@ firebase-errors.log*
 .env.test
 quiz.db
 /uploads/
+/vendor/
+composer.lock
+test_proctoring.html
+test_submit.html

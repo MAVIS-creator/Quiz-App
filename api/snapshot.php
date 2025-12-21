@@ -1,6 +1,13 @@
 <?php
 require __DIR__ . '/../db.php';
 
+// Check if Intervention Image is available
+$useIntervention = file_exists(__DIR__ . '/../vendor/autoload.php');
+if ($useIntervention) {
+    require __DIR__ . '/../vendor/autoload.php';
+    use Intervention\Image\ImageManagerStatic as Image;
+}
+
 try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'];
@@ -11,11 +18,11 @@ try {
         $type = strtolower($_GET['type'] ?? 'preview'); // preview | violation
         $limit = max(1, intval($_GET['limit'] ?? 1));
 
-        // Filter by filename prefix to avoid schema changes (no 'type' column assumed)
+        // Filter by filename prefix - files are now stored as {identifier}/{prefix}{identifier}_...
         $prefix = $type === 'violation' ? 'snapshotv_' : 'snapshot_';
         $sql = 'SELECT filename, timestamp FROM snapshots WHERE identifier=? AND filename LIKE ? ORDER BY timestamp DESC LIMIT ' . $limit;
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$id, $prefix . '%']);
+        $stmt->execute([$id, $id . '/' . $prefix . '%']);
 
         $rows = $stmt->fetchAll();
         foreach ($rows as &$row) {
@@ -39,6 +46,8 @@ try {
         $id = $data['identifier'] ?? null;
         $image = $data['image'] ?? null;
         $type = strtolower($data['type'] ?? 'preview'); // preview | violation
+        $faceCount = isset($data['faceCount']) ? (int)$data['faceCount'] : null;
+        
         if (!$id || !$image) json_out(['error' => 'identifier and image required'], 400);
 
         // Create uploads/{identifier} directory if it doesn't exist
@@ -54,18 +63,88 @@ try {
         // Convert data URL to file
         if (preg_match('/^data:image\/(\w+);base64,(.*)$/', $image, $m)) {
             $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
-            $data = base64_decode($m[2]);
             $prefix = $type === 'violation' ? 'snapshotv_' : 'snapshot_';
             $baseName = $prefix . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
-            $filename = $id . '/' . $baseName; // store relative path including identifier folder
+            $filename = $id . '/' . $baseName;
             $filepath = $uploadsDir . '/' . $filename;
             
-            if (file_put_contents($filepath, $data) !== false) {
-                $pdo->prepare('INSERT INTO snapshots(identifier,filename) VALUES (?,?)')->execute([$id, $filename]);
-                json_out(['ok' => true, 'type' => $type, 'filename' => $filename, 'url' => '/Quiz-App/uploads/' . $filename]);
+            // Use Intervention Image if available for better processing
+            if ($useIntervention) {
+                try {
+                    $img = Image::make($image);
+                    
+                    // Resize to standard width (save disk space)
+                    $img->resize(640, null, function ($constraint) {
+                        $constraint->aspectRatio();
+                        $constraint->upsize();
+                    });
+                    
+                    // Add watermark with timestamp and student ID
+                    $timestamp = date('Y-m-d H:i:s');
+                    $watermarkText = "{$id} | {$timestamp}";
+                    if ($faceCount !== null) {
+                        $watermarkText .= " | Faces: {$faceCount}";
+                    }
+                    
+                    // Draw semi-transparent background for watermark
+                    $textWidth = strlen($watermarkText) * 9;
+                    $img->rectangle(5, $img->height() - 30, $textWidth + 10, $img->height() - 5, function ($draw) {
+                        $draw->background('rgba(0, 0, 0, 0.7)');
+                    });
+                    
+                    // Add text watermark (will use default GD font if custom font not available)
+                    try {
+                        // Try with custom font first
+                        $fontPath = __DIR__ . '/../assets/arial.ttf';
+                        if (file_exists($fontPath)) {
+                            $img->text($watermarkText, 10, $img->height() - 10, function($font) use ($fontPath) {
+                                $font->file($fontPath);
+                                $font->size(14);
+                                $font->color('#ffffff');
+                                $font->align('left');
+                                $font->valign('bottom');
+                            });
+                        } else {
+                            // Fallback to GD built-in font
+                            $img->text($watermarkText, 10, $img->height() - 15, function($font) {
+                                $font->size(3); // GD font size
+                                $font->color('#ffffff');
+                                $font->align('left');
+                                $font->valign('bottom');
+                            });
+                        }
+                    } catch (Exception $fontError) {
+                        // Silent fail on font errors
+                        error_log("Watermark font error: " . $fontError->getMessage());
+                    }
+                    
+                    // Save with compression
+                    $img->save($filepath, 80); // 80% quality
+                    
+                } catch (Exception $e) {
+                    // Fallback to basic save if Intervention fails
+                    $rawData = base64_decode($m[2]);
+                    if (file_put_contents($filepath, $rawData) === false) {
+                        json_out(['error' => 'Failed to save file'], 500);
+                    }
+                }
             } else {
-                json_out(['error' => 'Failed to save file'], 500);
+                // Basic save without Intervention Image
+                $rawData = base64_decode($m[2]);
+                if (file_put_contents($filepath, $rawData) === false) {
+                    json_out(['error' => 'Failed to save file'], 500);
+                }
             }
+            
+            // Save to database
+            $pdo->prepare('INSERT INTO snapshots(identifier,filename) VALUES (?,?)')->execute([$id, $filename]);
+            json_out([
+                'ok' => true, 
+                'type' => $type, 
+                'filename' => $filename, 
+                'url' => '/Quiz-App/uploads/' . $filename,
+                'processed_with' => $useIntervention ? 'intervention' : 'basic'
+            ]);
         } else {
             json_out(['error' => 'Invalid image format'], 400);
         }

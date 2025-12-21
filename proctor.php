@@ -25,16 +25,17 @@ $activeSessions = $pdo->prepare('
 $activeSessions->execute([$adminGroup]);
 $activeSessions = $activeSessions->fetchAll();
 
-// Get violations sorted by student name - FILTERED BY GROUP
+// Get violations sorted by student name - FILTERED BY GROUP AND DATE
+$dateFilter = $_GET['date'] ?? date('Y-m-d'); // default to today
 $violCounts = $pdo->prepare('
     SELECT v.identifier, COUNT(*) as count, s.name 
     FROM violations v
     LEFT JOIN sessions s ON v.identifier = s.identifier
-    WHERE s.`group` = ?
+    WHERE s.`group` = ? AND DATE(v.created_at) = ?
     GROUP BY v.identifier
     ORDER BY s.name ASC, v.identifier ASC
 ');
-$violCounts->execute([$adminGroup]);
+$violCounts->execute([$adminGroup, $dateFilter]);
 $violCounts = $violCounts->fetchAll();
 
 // Get specific student violations if requested
@@ -181,10 +182,28 @@ if ($studentFilter) {
 
         <!-- Violations Summary -->
         <div class="bg-white rounded-2xl p-6 shadow-lg mb-8">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                <i class='bx bx-error text-2xl mr-2 text-red-600'></i>
-                Violations by Student (Sorted by Name)
-            </h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                    <i class='bx bx-error text-2xl mr-2 text-red-600'></i>
+                    Violations by Student (Sorted by Name)
+                </h2>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-semibold text-gray-600">Date:</label>
+                    <input 
+                        type="date" 
+                        id="violationDate" 
+                        value="<?php echo htmlspecialchars($dateFilter); ?>"
+                        onchange="window.location.href='proctor.php?date='+this.value"
+                        class="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none text-sm"
+                    >
+                    <button 
+                        onclick="window.location.href='proctor.php?date=<?php echo date('Y-m-d'); ?>'"
+                        class="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold"
+                    >
+                        Today
+                    </button>
+                </div>
+            </div>
             
             <?php if (empty($violCounts)): ?>
                 <div class="text-center py-8">
@@ -472,7 +491,22 @@ if ($studentFilter) {
                 Swal.fire({ icon: 'warning', title: 'Missing ID', text: 'Please enter a student ID' });
                 return;
             }
+            
             try {
+                // First check if student is online (has active session)
+                const checkRes = await fetch(`${API}/sessions.php?identifier=${encodeURIComponent(id)}`);
+                const checkData = await checkRes.json();
+                
+                if (!checkData || checkData.submitted || checkData.cancelled) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'User Not Online', 
+                        text: 'This student is not currently taking the quiz.' 
+                    });
+                    return;
+                }
+                
+                // Send audio request
                 const response = await fetch(API + '/messages.php', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -480,7 +514,19 @@ if ($studentFilter) {
                 });
                 const data = await response.json();
                 if (data.ok) {
-                    Swal.fire({ icon: 'success', title: 'Request Sent', text: 'The student will upload an audio clip shortly.', timer: 2000, showConfirmButton: false });
+                    // Show success message and automatically load audio after a few seconds
+                    await Swal.fire({ 
+                        icon: 'success', 
+                        title: 'Request Sent', 
+                        text: 'The student will upload an audio clip shortly. Auto-loading audio in 5 seconds...', 
+                        timer: 5000, 
+                        timerProgressBar: true,
+                        showConfirmButton: false 
+                    });
+                    
+                    // Auto-fill audio ID and trigger load
+                    document.getElementById('audioId').value = id;
+                    document.getElementById('loadAudio').click();
                 } else {
                     throw new Error(data.error || 'Failed');
                 }
@@ -691,6 +737,23 @@ if ($studentFilter) {
 
         // Send Message to Student
         async function sendMessage(identifier, studentName) {
+            // Check if student is online first
+            try {
+                const checkRes = await fetch(`${API}/sessions.php?identifier=${encodeURIComponent(identifier)}`);
+                const checkData = await checkRes.json();
+                
+                if (!checkData || checkData.submitted || checkData.cancelled) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'User Not Online', 
+                        text: 'This student is not currently taking the quiz.' 
+                    });
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to check online status:', err);
+            }
+            
             const { value: message } = await Swal.fire({
                 title: `Message to ${studentName}`,
                 input: 'textarea',
@@ -747,6 +810,23 @@ if ($studentFilter) {
 
         // Add Time to Student
         async function addTime(identifier, studentName) {
+            // Check if student is online first
+            try {
+                const checkRes = await fetch(`${API}/sessions.php?identifier=${encodeURIComponent(identifier)}`);
+                const checkData = await checkRes.json();
+                
+                if (!checkData || checkData.submitted || checkData.cancelled) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'User Not Online', 
+                        text: 'This student is not currently taking the quiz.' 
+                    });
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to check online status:', err);
+            }
+            
             const { value: timeInput } = await Swal.fire({
                 title: `Add Time for ${studentName}`,
                 input: 'number',

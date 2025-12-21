@@ -157,6 +157,7 @@ foreach ($questionIds as $qid) {
     <title>Quiz - HTML & CSS Assessment</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         @keyframes fadeIn {
@@ -510,6 +511,9 @@ foreach ($questionIds as $qid) {
         let mediaRecorder = null;
         let audioChunks = [];
         let isResuming = <?php echo $isResuming ? 'true' : 'false'; ?>;
+        let faceApiModelsLoaded = false;
+        let lastFaceDetectionTime = 0;
+        const FACE_DETECTION_INTERVAL = 3000; // 3 seconds
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -766,15 +770,36 @@ foreach ($questionIds as $qid) {
                 video.srcObject = cameraStream;
                 video.muted = true; // MUTE video element so audio doesn't play
 
+                // Load face-api.js models
+                await loadFaceApiModels();
+
                 // Start background audio recording
                 startBackgroundRecording();
 
-                // Smart snapshot - only when multiple faces detected
-                setInterval(checkForMultipleFaces, 3000);
+                // Smart snapshot with real face detection
+                setInterval(checkForMultipleFaces, FACE_DETECTION_INTERVAL);
             } catch (e) {
                 console.warn('Camera access denied:', e);
                 document.getElementById('cameraStatus').innerHTML =
                     '<i class="bx bx-video-off mr-1"></i><span class="text-red-600">Camera Disabled</span>';
+            }
+        }
+
+        // Load face-api.js models from CDN
+        async function loadFaceApiModels() {
+            try {
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+                
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+                ]);
+                
+                faceApiModelsLoaded = true;
+                console.log('Face-API models loaded successfully');
+            } catch (e) {
+                console.error('Failed to load face-api models:', e);
+                faceApiModelsLoaded = false;
             }
         }
 
@@ -837,33 +862,88 @@ foreach ($questionIds as $qid) {
         }
 
         async function checkForMultipleFaces() {
-            // This is a placeholder - in production, you'd use face-api.js or similar
-            // For now, capture snapshot at intervals
-            const canvas = document.getElementById('snapshot');
+            // Throttle face detection to avoid performance issues
+            const now = Date.now();
+            if (now - lastFaceDetectionTime < FACE_DETECTION_INTERVAL) {
+                return;
+            }
+            lastFaceDetectionTime = now;
+
             const video = document.getElementById('camera');
+            const canvas = document.getElementById('snapshot');
             const ctx = canvas.getContext('2d');
 
+            // Always capture canvas for potential upload
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
 
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            let faceCount = 1; // Default assume 1 face
+            let shouldCapture = false;
 
-            // Send preview snapshot to server
-            try {
-                await fetch(`${API}/snapshot.php`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        identifier: identifier,
-                        image: dataUrl,
-                        type: 'preview'
-                    })
-                });
-            } catch (e) {
-                console.error('Snapshot failed:', e);
+            // Use face-api.js if models are loaded
+            if (faceApiModelsLoaded && typeof faceapi !== 'undefined') {
+                try {
+                    const detections = await faceapi.detectAllFaces(
+                        video,
+                        new faceapi.TinyFaceDetectorOptions({
+                            inputSize: 224,
+                            scoreThreshold: 0.5
+                        })
+                    );
+
+                    faceCount = detections.length;
+
+                    // Capture snapshot if:
+                    // 1. No face detected (student may have left)
+                    // 2. Multiple faces detected (potential cheating)
+                    if (faceCount === 0) {
+                        console.warn('No face detected - capturing evidence');
+                        shouldCapture = true;
+                        logViolation('no_face', 'No face detected in camera view');
+                    } else if (faceCount > 1) {
+                        console.warn(`Multiple faces detected (${faceCount}) - capturing evidence`);
+                        shouldCapture = true;
+                        logViolation('multiple_faces', `${faceCount} faces detected in camera view`);
+                    } else {
+                        // Exactly 1 face - normal, capture preview occasionally (every 10 seconds)
+                        if (Math.random() < 0.33) { // 33% chance = ~every 9 seconds
+                            shouldCapture = true;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Face detection failed:', e);
+                    // Fallback: capture preview occasionally
+                    if (Math.random() < 0.33) {
+                        shouldCapture = true;
+                    }
+                }
+            } else {
+                // Fallback mode without face-api: capture occasionally
+                shouldCapture = true;
+            }
+
+            // Send snapshot to server
+            if (shouldCapture) {
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                const snapshotType = (faceCount === 0 || faceCount > 1) ? 'violation' : 'preview';
+
+                try {
+                    await fetch(`${API}/snapshot.php`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            identifier: identifier,
+                            image: dataUrl,
+                            type: snapshotType,
+                            faceCount: faceCount
+                        })
+                    });
+                } catch (e) {
+                    console.error('Snapshot upload failed:', e);
+                }
             }
         }
 
