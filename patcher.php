@@ -85,6 +85,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <i class='bx bx-folder text-blue-600 mr-2'></i>
                         Files
                     </h2>
+
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="promptNewFile()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs flex items-center">
+                            <i class='bx bx-file-plus mr-1'></i>
+                            New File
+                        </button>
+                        <button onclick="promptNewFolder()" class="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs flex items-center">
+                            <i class='bx bx-folder-plus mr-1'></i>
+                            New Folder
+                        </button>
+                    </div>
                     
                     <div class="mb-4">
                         <input 
@@ -513,6 +524,65 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        async function promptNewFile() {
+            const { value: path } = await Swal.fire({
+                title: 'Create New File',
+                input: 'text',
+                inputLabel: 'Relative path (inside api, assets, components, scripts/tests)',
+                inputPlaceholder: 'e.g. api/new_tool.php or assets/styles/new.css',
+                showCancelButton: true,
+                confirmButtonText: 'Create File',
+                confirmButtonColor: '#4f46e5'
+            });
+
+            if (!path) return;
+
+            try {
+                Swal.showLoading();
+                const res = await fetch(`${API}?action=createFile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                await loadFiles();
+                await loadFile(data.path);
+                Swal.fire('Created', 'File created successfully', 'success');
+            } catch (err) {
+                Swal.fire('Error', err.message, 'error');
+            }
+        }
+
+        async function promptNewFolder() {
+            const { value: path } = await Swal.fire({
+                title: 'Create New Folder',
+                input: 'text',
+                inputLabel: 'Relative path (inside api, assets, components, scripts/tests)',
+                inputPlaceholder: 'e.g. assets/images/icons or scripts/tests/helpers',
+                showCancelButton: true,
+                confirmButtonText: 'Create Folder',
+                confirmButtonColor: '#f59e0b'
+            });
+
+            if (!path) return;
+
+            try {
+                Swal.showLoading();
+                const res = await fetch(`${API}?action=createFolder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                await loadFiles();
+                Swal.fire('Created', 'Folder created successfully', 'success');
+            } catch (err) {
+                Swal.fire('Error', err.message, 'error');
+            }
         }
     </script>
 </body>

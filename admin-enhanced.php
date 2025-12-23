@@ -300,6 +300,14 @@ if (!$useCache) {
                 <h3 class="font-bold text-lg mb-1">Proctor Console</h3>
                 <p class="text-sm text-gray-600">Open live proctoring</p>
             </a>
+
+            <a href="patcher.php" class="ui-card p-6 text-center cursor-pointer group" id="patcher">
+                <div class="inline-block p-3 bg-gradient-to-br from-amber-100 to-amber-50 rounded-lg mb-3 group-hover:scale-110 transition-transform">
+                    <i class='bx bx-code-alt text-3xl text-amber-600'></i>
+                </div>
+                <h3 class="font-bold text-lg mb-1">The Patcher</h3>
+                <p class="text-sm text-gray-600">Safe code editor with backups</p>
+            </a>
         </div>
 
         <!-- Quick Stats -->

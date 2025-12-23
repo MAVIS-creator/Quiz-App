@@ -36,6 +36,12 @@ try {
         case 'listBackups':
             handleListBackups();
             break;
+        case 'createFile':
+            handleCreateFile();
+            break;
+        case 'createFolder':
+            handleCreateFolder();
+            break;
         default:
             json_out(['error' => 'Invalid action'], 400);
     }
@@ -289,6 +295,152 @@ function handleListBackups() {
     });
     
     json_out(['backups' => $backups, 'count' => count($backups)]);
+}
+
+/**
+ * Validate target path for creation (file or folder)
+ */
+function validateCreateTarget($targetPath, $isFile = true) {
+    $rootDir = realpath(__DIR__ . '/..');
+    $whitelist = ['api', 'assets', 'components', 'scripts/tests'];
+    $blocked = ['db.php', '.env', '.htaccess', 'config.php'];
+    $allowedExtensions = ['php', 'js', 'css', 'html', 'json'];
+
+    // Clean traversal
+    $clean = ltrim(str_replace(['../', '..\\'], '', str_replace('\\', '/', $targetPath)), '/');
+    $full = $rootDir . '/' . $clean;
+    $fullDir = $isFile ? dirname($full) : $full;
+
+    $realRoot = realpath($rootDir);
+    $realParent = realpath($fullDir) ?: $fullDir; // parent may not exist yet
+
+    // Ensure target is under a whitelisted root
+    $inWhitelist = false;
+    foreach ($whitelist as $allowed) {
+        if (strpos($clean, $allowed . '/') === 0 || $clean === $allowed) {
+            $inWhitelist = true;
+            break;
+        }
+    }
+    if (!$inWhitelist) {
+        throw new Exception('Target not in allowed directory');
+    }
+
+    // Blocked base names
+    $base = basename($full);
+    if (in_array($base, $blocked)) {
+        throw new Exception('Target name is protected');
+    }
+
+    if ($isFile) {
+        $ext = pathinfo($full, PATHINFO_EXTENSION);
+        if (!$ext || !in_array($ext, $allowedExtensions)) {
+            throw new Exception('File type not allowed');
+        }
+    }
+
+    return [
+        'rootDir' => $realRoot,
+        'fullPath' => $full,
+        'relativePath' => $clean,
+        'parentDir' => $fullDir
+    ];
+}
+
+/**
+ * Create a new file with optional initial content
+ */
+function handleCreateFile() {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $path = $data['path'] ?? '';
+    $content = $data['content'] ?? null;
+
+    if (!$path) {
+        json_out(['error' => 'Path is required'], 400);
+    }
+
+    $target = validateCreateTarget($path, true);
+
+    // Create parent directories if missing (within whitelist)
+    if (!is_dir($target['parentDir'])) {
+        if (!mkdir($target['parentDir'], 0755, true)) {
+            throw new Exception('Failed to create parent directories');
+        }
+    }
+
+    if (file_exists($target['fullPath'])) {
+        json_out(['error' => 'File already exists'], 400);
+    }
+
+    // Choose default content by extension if content is null
+    if ($content === null) {
+        $ext = pathinfo($target['fullPath'], PATHINFO_EXTENSION);
+        $content = defaultTemplateForExt($ext, basename($target['fullPath']));
+    }
+
+    if (file_put_contents($target['fullPath'], $content) === false) {
+        throw new Exception('Failed to create file');
+    }
+
+    logPatcherAction([
+        'user' => $_SESSION['admin_username'] ?? 'admin',
+        'action' => 'create_file',
+        'file' => $target['relativePath'],
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+
+    json_out(['success' => true, 'path' => $target['relativePath']]);
+}
+
+/**
+ * Create a new folder (recursive)
+ */
+function handleCreateFolder() {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $path = $data['path'] ?? '';
+
+    if (!$path) {
+        json_out(['error' => 'Path is required'], 400);
+    }
+
+    $target = validateCreateTarget($path, false);
+
+    if (is_dir($target['fullPath'])) {
+        json_out(['error' => 'Folder already exists'], 400);
+    }
+
+    if (!mkdir($target['fullPath'], 0755, true)) {
+        throw new Exception('Failed to create folder');
+    }
+
+    logPatcherAction([
+        'user' => $_SESSION['admin_username'] ?? 'admin',
+        'action' => 'create_folder',
+        'folder' => $target['relativePath'],
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+
+    json_out(['success' => true, 'path' => $target['relativePath']]);
+}
+
+/**
+ * Default starter templates for new files
+ */
+function defaultTemplateForExt($ext, $name) {
+    switch ($ext) {
+        case 'php':
+            return "<?php\n/**\n * ${name}\n */\n\n?>\n";
+        case 'js':
+            return "// ${name}\n'use strict';\n\n";
+        case 'css':
+            return "/* ${name} */\n\n";
+        case 'html':
+            return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>${name}</title>\n</head>\n<body>\n\n</body>\n</html>\n";
+        case 'json':
+            return "{\n  \"name\": \"${name}\"\n}\n";
+        default:
+            return "";
+    }
 }
 
 /**
