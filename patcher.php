@@ -265,8 +265,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     didOpen: () => Swal.showLoading()
                 });
 
+                console.log('Loading file:', path);
                 const res = await fetch(`${API}?action=readFile&path=${encodeURIComponent(path)}`);
                 const data = await res.json();
+                
+                console.log('API response:', data);
                 
                 if (data.error) throw new Error(data.error);
                 
@@ -289,6 +292,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 Swal.close();
             } catch (err) {
+                console.error('Error:', err);
                 Swal.fire('Error', err.message, 'error');
             }
         }

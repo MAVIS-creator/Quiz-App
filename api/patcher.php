@@ -74,32 +74,33 @@ function validatePath($path) {
     // Allowed extensions
     $allowedExtensions = ['php', 'js', 'css', 'html', 'json'];
     
-    // Remove any path traversal attempts
-    $cleanPath = str_replace(['../', '..\\'], '', $path);
-    $fullPath = realpath($rootDir . '/' . $cleanPath);
+    // Normalize and strip traversal
+    $cleanPath = ltrim(str_replace(['../', '..\\'], '', str_replace('\\', '/', (string)$path)), '/');
+    $candidate = $rootDir . '/' . $cleanPath;
+    
+    // Resolve to real path when possible; if not, fallback to candidate (some hosts limit realpath)
+    $fullPath = file_exists($candidate) ? (realpath($candidate) ?: $candidate) : false;
     
     // Check 1: File must exist
     if (!$fullPath || !file_exists($fullPath)) {
-        throw new Exception('File not found');
+        throw new Exception('File not found: ' . $cleanPath);
     }
     
     // Check 2: Must be within root directory (no escape)
-    if (strpos($fullPath, $rootDir) !== 0) {
+    $fullDir = realpath(dirname($fullPath)) ?: dirname($fullPath);
+    if (strpos($fullDir, $rootDir) !== 0) {
         throw new Exception('Path traversal detected - access denied');
     }
     
-    // Check 3: Check if in whitelisted directory
-    $relativePath = str_replace($rootDir . DIRECTORY_SEPARATOR, '', $fullPath);
-    $relativePath = str_replace('\\', '/', $relativePath);
-    
+    // Check 3: Check if in whitelisted directory (use sanitized relative path)
+    $relativePath = $cleanPath;
     $inWhitelist = false;
     foreach ($whitelist as $allowed) {
-        if (strpos($relativePath, $allowed . '/') === 0) {
+        if (strpos($relativePath, $allowed . '/') === 0 || $relativePath === $allowed) {
             $inWhitelist = true;
             break;
         }
     }
-    
     if (!$inWhitelist) {
         throw new Exception('File not in allowed directory - access denied');
     }
@@ -148,8 +149,19 @@ function handleListFiles() {
             
             $filename = $file->getFilename();
             $ext = $file->getExtension();
-            $relativePath = str_replace($rootDir . DIRECTORY_SEPARATOR, '', $file->getPathname());
-            $relativePath = str_replace('\\', '/', $relativePath);
+            
+            // Normalize both paths to use forward slashes for comparison
+            $fullPath = str_replace('\\', '/', $file->getPathname());
+            $normalRoot = str_replace('\\', '/', $rootDir);
+            
+            // Strip root directory and leading slash to get relative path
+            if (strpos($fullPath, $normalRoot . '/') === 0) {
+                $relativePath = substr($fullPath, strlen($normalRoot) + 1);
+            } else {
+                // Fallback if stripping didn't work
+                $relativePath = substr($fullPath, strlen($normalRoot));
+                $relativePath = ltrim($relativePath, '/');
+            }
             
             // Skip blocked files
             if (in_array($filename, $blocked)) continue;
@@ -306,13 +318,10 @@ function validateCreateTarget($targetPath, $isFile = true) {
     $blocked = ['db.php', '.env', '.htaccess', 'config.php'];
     $allowedExtensions = ['php', 'js', 'css', 'html', 'json'];
 
-    // Clean traversal
-    $clean = ltrim(str_replace(['../', '..\\'], '', str_replace('\\', '/', $targetPath)), '/');
-    $full = $rootDir . '/' . $clean;
-    $fullDir = $isFile ? dirname($full) : $full;
-
-    $realRoot = realpath($rootDir);
-    $realParent = realpath($fullDir) ?: $fullDir; // parent may not exist yet
+    // Normalize and strip traversal (same as validatePath)
+    $clean = ltrim(str_replace(['../', '..\\'], '', str_replace('\\', '/', (string)$targetPath)), '/');
+    $candidate = $rootDir . '/' . $clean;
+    $parentDir = dirname($candidate);
 
     // Ensure target is under a whitelisted root
     $inWhitelist = false;
@@ -327,23 +336,23 @@ function validateCreateTarget($targetPath, $isFile = true) {
     }
 
     // Blocked base names
-    $base = basename($full);
+    $base = basename($candidate);
     if (in_array($base, $blocked)) {
         throw new Exception('Target name is protected');
     }
 
     if ($isFile) {
-        $ext = pathinfo($full, PATHINFO_EXTENSION);
+        $ext = pathinfo($candidate, PATHINFO_EXTENSION);
         if (!$ext || !in_array($ext, $allowedExtensions)) {
             throw new Exception('File type not allowed');
         }
     }
 
     return [
-        'rootDir' => $realRoot,
-        'fullPath' => $full,
+        'rootDir' => $rootDir,
+        'fullPath' => $candidate,
         'relativePath' => $clean,
-        'parentDir' => $fullDir
+        'parentDir' => $parentDir
     ];
 }
 
