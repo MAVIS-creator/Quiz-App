@@ -1,6 +1,17 @@
 <?php
 session_start();
 
+// Handle logout request
+if (isset($_GET['logout'])) {
+    $_SESSION = array();
+    if (isset($_COOKIE[session_name()])) {
+        setcookie(session_name(), '', time()-3600, '/');
+    }
+    session_destroy();
+    header('Location: login.php');
+    exit;
+}
+
 // Check if logged in
 if (!isset($_SESSION['student_matric'])) {
     header('Location: login.php');
@@ -173,7 +184,7 @@ $hasAttempt = $sessionData && $sessionData['submitted'] == 1;
                     <h1 class="text-2xl sm:text-3xl font-bold">Quiz Results</h1>
                     <p class="text-white/90 text-sm sm:text-base mt-1"><?php echo htmlspecialchars($studentName); ?></p>
                 </div>
-                <a href="login.php" class="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-300 text-sm sm:text-base font-semibold">
+                <a href="result.php?logout=1" class="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-300 text-sm sm:text-base font-semibold">
                     <span class="flex items-center">
                         <i class='bx bx-home text-xl mr-2'></i>
                         Back to Login

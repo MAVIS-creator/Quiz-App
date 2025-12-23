@@ -1542,16 +1542,16 @@ if (!$useCache) {
                 let correctCount = 0;
                 const answeredCount = Object.keys(answers).filter(k => answers[k] !== null && answers[k] !== '').length;
                 
-                // Fetch questions to compare answers
-                if (totalQuestions > 0 && answeredCount > 0) {
-                    const placeholders = questionIds.map(() => '?').join(',');
-                    const qRes = await fetch(API + '/accuracy.php');
+                // Fetch accuracy data to get correct count
+                if (totalQuestions > 0) {
+                    const qRes = await fetch(API + '/accuracy.php?identifier=' + encodeURIComponent(identifier));
                     const qData = await qRes.json();
                     
-                    // Try to get correct count from accuracy data
-                    const studentData = qData.students?.find(s => s.identifier === identifier);
-                    if (studentData) {
-                        correctCount = studentData.correct_answers || 0;
+                    // Get correct count from accuracy data (returns single object when filtering by identifier)
+                    if (qData && qData.score !== undefined) {
+                        correctCount = qData.score || 0;
+                    } else if (Array.isArray(qData.students) && qData.students.length > 0) {
+                        correctCount = qData.students[0].score || 0;
                     }
                 }
                 

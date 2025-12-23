@@ -1,8 +1,8 @@
 <?php
 /**
- * API: Calculate student accuracy and performance metrics
- * Returns detailed statistics about student's quiz performance
- * Includes 15-second caching to prevent overload
+ * API: Get student accuracy and performance metrics
+ * Returns statistics about student's quiz performance
+ * Uses pre-calculated accuracy_score stored in sessions table
  */
 
 require_once '../db.php';
@@ -27,6 +27,83 @@ try {
         
         // Get all students or specific student
         $identifier = $_GET['identifier'] ?? null;
+        
+        $query = 'SELECT s.*, 
+                         (SELECT COUNT(*) FROM violations WHERE identifier = s.identifier) as violation_count
+                  FROM sessions s';
+        
+        if ($identifier) {
+            $query .= ' WHERE s.identifier = ?';
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([$identifier]);
+        } else {
+            $stmt = $pdo->query($query);
+        }
+        
+        $students = $stmt->fetchAll();
+        $results = [];
+        
+        foreach ($students as $student) {
+            if (!$student['submitted']) {
+                $results[] = [
+                    'identifier' => $student['identifier'],
+                    'name' => $student['name'],
+                    'status' => $student['status'],
+                    'accuracy' => 0,
+                    'score' => 0,
+                    'total_questions' => 0,
+                    'avg_time_per_question' => 0,
+                    'violations' => $student['violation_count'],
+                    'submitted' => false
+                ];
+                continue;
+            }
+            
+            // Use pre-calculated accuracy_score from database
+            $answers = json_decode($student['answers_json'], true) ?? [];
+            $questionIds = json_decode($student['question_ids_json'], true) ?? [];
+            $totalQuestions = count($questionIds);
+            
+            // Get accuracy from stored column (already calculated)
+            $accuracy = floatval($student['accuracy_score'] ?? 0);
+            
+            // Calculate correct answers from accuracy percentage
+            $correctCount = $totalQuestions > 0 ? round(($accuracy / 100) * $totalQuestions) : 0;
+            
+            $results[] = [
+                'identifier' => $student['identifier'],
+                'name' => $student['name'],
+                'status' => $student['status'],
+                'accuracy' => round($accuracy, 2),
+                'score' => $correctCount,
+                'total_questions' => $totalQuestions,
+                'avg_time_per_question' => round(floatval($student['avg_time_per_question'] ?? 0), 2),
+                'violations' => $student['violation_count'],
+                'time_adjustment' => $student['time_adjustment_seconds'],
+                'point_deduction' => $student['point_deduction'],
+                'submitted' => true
+            ];
+        }
+        
+        $json = '';
+        if ($identifier) {
+            $json = json_encode($results[0] ?? ['error' => 'Student not found']);
+        } else {
+            $json = json_encode(['students' => $results]);
+        }
+        
+        // Cache for 30 seconds using file-based cache
+        @file_put_contents($cacheFile, $json);
+        
+        echo $json;
+    }
+    
+} catch (Exception $e) {
+    json_out(['error' => $e->getMessage()], 500);
+}
+?>
+
+?>
         
         $query = 'SELECT s.*, 
                          (SELECT COUNT(*) FROM violations WHERE identifier = s.identifier) as violation_count

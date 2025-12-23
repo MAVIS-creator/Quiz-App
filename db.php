@@ -3,11 +3,11 @@
 function db(): PDO {
   static $pdo = null;
   if ($pdo === null) {
-    $host = 'sql308.infinityfree.com';
+    $host = 'localhost';
     $port = '3306';
-    $db   = 'if0_40733821_quiz_app';
-    $user = 'if0_40733821';
-    $pass = 'AdetayoIbk23';
+    $db   = 'quiz_app';
+    $user = 'root';
+    $pass = ''; // Set your MySQL root password here if needed
     $dsn  = "mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4";
     $pdo = new PDO($dsn, $user, $pass, [
       PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
