@@ -20,6 +20,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <!-- Load modes in correct order: XML must be before PHP/HTML -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
@@ -532,7 +533,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 const icon = getFileIcon(file.extension);
                 html += `
-                    <div class="file-item" onclick="loadFile('${file.path}')">
+                    <div class="file-item" data-path="${file.path}" onclick="loadFile('${file.path}')">
                         <i class='bx ${icon}'></i>
                         <span>${file.name}</span>
                     </div>
@@ -572,25 +573,41 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (!editor) {
                     const editorDiv = document.querySelector('.editor-container');
                     editorDiv.innerHTML = '';
-                    editor = CodeMirror(editorDiv, {
-                        value: data.content,
-                        mode: getModeForExtension(data.extension),
-                        theme: 'monokai',
-                        lineNumbers: true,
-                        lineWrapping: true,
-                        readOnly: true,
-                        indentUnit: 4,
-                        tabSize: 4,
-                        indentWithTabs: false,
-                        extraKeys: {
-                            'Ctrl-/': 'toggleComment',
-                            'Cmd-/': 'toggleComment'
-                        }
-                    });
+                    try {
+                        editor = CodeMirror(editorDiv, {
+                            value: data.content,
+                            mode: getModeForExtension(data.extension),
+                            theme: 'monokai',
+                            lineNumbers: true,
+                            lineWrapping: true,
+                            readOnly: true,
+                            indentUnit: 4,
+                            tabSize: 4,
+                            indentWithTabs: false,
+                            extraKeys: {
+                                'Ctrl-/': 'toggleComment',
+                                'Cmd-/': 'toggleComment'
+                            }
+                        });
+                    } catch (cmErr) {
+                        console.warn('CodeMirror error:', cmErr);
+                        // Fallback to plain textarea
+                        editor = {
+                            getValue: () => editorDiv.querySelector('textarea').value,
+                            setValue: (val) => editorDiv.querySelector('textarea').value = val,
+                            setOption: () => {},
+                            focus: () => editorDiv.querySelector('textarea').focus()
+                        };
+                        editorDiv.innerHTML = `<textarea style="width:100%; height:100%; padding:10px; font-family:monospace; font-size:13px; border:none;" readonly>${data.content}</textarea>`;
+                    }
                 } else {
-                    editor.setValue(data.content);
-                    editor.setOption('mode', getModeForExtension(data.extension));
-                    editor.setOption('readOnly', true);
+                    try {
+                        editor.setValue(data.content);
+                        editor.setOption('mode', getModeForExtension(data.extension));
+                        editor.setOption('readOnly', true);
+                    } catch (e) {
+                        console.warn('CodeMirror mode switch error:', e);
+                    }
                 }
                 
                 // Update header
@@ -607,9 +624,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 document.getElementById('editBtn').innerHTML = '<i class="bx bx-edit"></i> Edit';
                 document.getElementById('editBtn').classList.remove('editing');
                 
-                // Mark file as active
-                document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
-                event.target.closest('.file-item').classList.add('active');
+                // Mark file as active by matching path (no event dependency)
+                document.querySelectorAll('.file-item').forEach(el => {
+                    el.classList.remove('active');
+                    const itemPath = el.getAttribute('data-path');
+                    if (itemPath === path) {
+                        el.classList.add('active');
+                    }
+                });
                 
                 Swal.close();
             } catch (err) {
@@ -841,7 +863,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function getModeForExtension(ext) {
             const modes = {
-                'php': 'application/x-httpd-php',
+                'php': { name: 'application/x-httpd-php', startOpen: true },
                 'js': 'text/javascript',
                 'css': 'text/css',
                 'html': 'text/html',
