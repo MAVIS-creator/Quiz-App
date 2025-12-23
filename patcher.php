@@ -15,49 +15,382 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    
+    <!-- CodeMirror CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/php/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/json/json.min.js"></script>
+    
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <style>
-        .code-editor {
-            font-family: 'Courier New', monospace;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+        }
+        
+        .editor-wrapper {
+            display: flex;
+            height: calc(100vh - 120px);
+            gap: 1px;
+            background: #2d2d2d;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-header {
+            padding: 16px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sidebar-actions {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .sidebar-actions button {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .btn-new-file {
+            background: #0e639c;
+            color: white;
+        }
+        
+        .btn-new-file:hover {
+            background: #1177bb;
+        }
+        
+        .btn-new-folder {
+            background: #6f42c1;
+            color: white;
+        }
+        
+        .btn-new-folder:hover {
+            background: #7d52d6;
+        }
+        
+        .file-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+        
+        .file-search {
+            margin: 8px;
+            padding: 8px 12px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 12px;
+        }
+        
+        .file-search::placeholder {
+            color: #858585;
+        }
+        
+        .file-item {
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cccccc;
+            transition: background 0.15s;
+        }
+        
+        .file-item:hover {
+            background: #37373d;
+            color: #ffffff;
+        }
+        
+        .file-item.active {
+            background: #094771;
+            color: #ffffff;
+            border-left: 3px solid #007acc;
+            padding-left: 13px;
+        }
+        
+        .file-item i {
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+        
+        .file-dir {
+            padding: 4px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #858585;
+            margin-top: 8px;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        
+        .main-editor {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e1e;
+            overflow: hidden;
+        }
+        
+        .editor-header {
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .editor-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+        
+        .editor-title h2 {
             font-size: 14px;
-            line-height: 1.5;
-            tab-size: 4;
+            font-weight: 500;
+            color: #e0e0e0;
+            margin: 0;
+        }
+        
+        .editor-title .breadcrumb {
+            font-size: 12px;
+            color: #858585;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .editor-btn {
+            padding: 6px 14px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .btn-backups {
+            background: #4d4d4d;
+            color: #e0e0e0;
+        }
+        
+        .btn-backups:hover {
+            background: #5d5d5d;
+        }
+        
+        .btn-edit {
+            background: #0e639c;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background: #1177bb;
+        }
+        
+        .btn-edit.editing {
+            background: #d99f00;
+        }
+        
+        .btn-edit.editing:hover {
+            background: #e8ac2e;
+        }
+        
+        .editor-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .CodeMirror {
+            flex: 1 !important;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace !important;
+            font-size: 13px !important;
+            line-height: 1.6 !important;
+            background: #1e1e1e !important;
+            color: #d4d4d4 !important;
+        }
+        
+        .CodeMirror-linenumber {
+            background: #1e1e1e !important;
+            color: #858585 !important;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace !important;
+        }
+        
+        .CodeMirror-gutters {
+            background: #1e1e1e !important;
+            border-right: 1px solid #3e3e42 !important;
+        }
+        
+        .CodeMirror-cursor {
+            border-left: 1px solid #aeafad !important;
+        }
+        
+        .CodeMirror-selected {
+            background: #264f78 !important;
+        }
+        
+        .editor-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #858585;
+            font-size: 14px;
+        }
+        
+        .editor-placeholder i {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+        
+        .controls-bar {
+            background: #2d2d30;
+            border-top: 1px solid #3e3e42;
+            padding: 12px 20px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            padding: 8px 16px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-preview {
+            background: #0e639c;
+            color: white;
+        }
+        
+        .btn-preview:hover:not(:disabled) {
+            background: #1177bb;
+        }
+        
+        .btn-apply {
+            background: #13a10e;
+            color: white;
+        }
+        
+        .btn-apply:hover:not(:disabled) {
+            background: #16c60c;
+        }
+        
+        .btn-cancel {
+            background: #4d4d4d;
+            color: #e0e0e0;
+        }
+        
+        .btn-cancel:hover {
+            background: #5d5d5d;
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         .diff-line {
             padding: 2px 8px;
             border-left: 3px solid transparent;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
         }
         
         .diff-added {
-            background-color: #d4edda;
-            border-left-color: #28a745;
+            background-color: #1d3a1d;
+            border-left-color: #4ec9b0;
         }
         
         .diff-removed {
-            background-color: #f8d7da;
-            border-left-color: #dc3545;
+            background-color: #3a1d1d;
+            border-left-color: #ce7b7b;
         }
         
         .diff-unchanged {
-            background-color: #f8f9fa;
-            border-left-color: #e9ecef;
+            background-color: #2d2d30;
+            border-left-color: #3e3e42;
         }
         
-        .file-item:hover {
-            background-color: #f3f4f6;
-            cursor: pointer;
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
         }
         
-        .protected-badge {
-            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #464647;
+            border-radius: 6px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #545455;
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body>
     <!-- Header -->
     <header class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex justify-between items-center">
                 <div>
                     <h1 class="text-2xl font-bold flex items-center">
@@ -76,112 +409,75 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         </div>
     </header>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-12 gap-6">
-            <!-- Left Sidebar: File Browser -->
-            <div class="col-span-3">
-                <div class="bg-white rounded-lg shadow-lg p-4">
-                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                        <i class='bx bx-folder text-blue-600 mr-2'></i>
-                        Files
-                    </h2>
+    <div class="editor-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <i class='bx bx-folder'></i>
+                Files
+            </div>
+            
+            <div class="sidebar-actions">
+                <button class="btn-new-file" onclick="promptNewFile()" title="New File">
+                    <i class='bx bx-file-plus'></i> New
+                </button>
+                <button class="btn-new-folder" onclick="promptNewFolder()" title="New Folder">
+                    <i class='bx bx-folder-plus'></i> Folder
+                </button>
+            </div>
+            
+            <input 
+                type="text" 
+                id="fileSearch" 
+                class="file-search"
+                placeholder="Search files..."
+            />
+            
+            <div class="file-list" id="fileList">
+                <div style="padding: 20px; text-align: center; color: #858585; font-size: 12px;">
+                    <i class='bx bx-loader-alt bx-spin' style="font-size: 24px; display: block; margin-bottom: 8px;"></i>
+                    Loading files...
+                </div>
+            </div>
+        </div>
 
-                    <div class="flex gap-2 mb-4">
-                        <button onclick="promptNewFile()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs flex items-center">
-                            <i class='bx bx-file-plus mr-1'></i>
-                            New File
-                        </button>
-                        <button onclick="promptNewFolder()" class="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs flex items-center">
-                            <i class='bx bx-folder-plus mr-1'></i>
-                            New Folder
-                        </button>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <input 
-                            type="text" 
-                            id="fileSearch" 
-                            placeholder="Search files..."
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                        />
-                    </div>
-
-                    <div id="fileList" class="space-y-1 max-h-[600px] overflow-y-auto">
-                        <div class="text-center py-8 text-gray-500">
-                            <i class='bx bx-loader-alt bx-spin text-3xl'></i>
-                            <p class="text-sm mt-2">Loading files...</p>
-                        </div>
+        <!-- Main Editor -->
+        <div class="main-editor">
+            <div class="editor-header" id="editorHeader" style="display: none;">
+                <div class="editor-title">
+                    <i class='bx bx-file' id="fileIcon"></i>
+                    <div>
+                        <h2 id="currentFileName">Untitled</h2>
+                        <div class="breadcrumb" id="currentFilePath"></div>
                     </div>
                 </div>
-
-                <!-- Safety Info -->
-                <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg shadow-lg p-4 mt-4 border border-amber-200">
-                    <h3 class="font-bold text-amber-900 mb-2 flex items-center">
-                        <i class='bx bx-shield text-amber-600 mr-2'></i>
-                        Safety Locks
-                    </h3>
-                    <ul class="text-xs text-amber-800 space-y-1">
-                        <li>✓ Whitelisted directories only</li>
-                        <li>✓ Config files protected</li>
-                        <li>✓ Auto-backup before changes</li>
-                        <li>✓ Diff preview required</li>
-                        <li>✓ All actions logged</li>
-                    </ul>
+                <div class="editor-actions">
+                    <button onclick="viewBackups()" class="editor-btn btn-backups">
+                        <i class='bx bx-history'></i> Backups
+                    </button>
+                    <button onclick="toggleEditMode()" id="editBtn" class="editor-btn btn-edit">
+                        <i class='bx bx-edit'></i> Edit
+                    </button>
                 </div>
             </div>
 
-            <!-- Main Editor Area -->
-            <div class="col-span-9">
-                <!-- File Info Bar -->
-                <div id="fileInfoBar" class="bg-white rounded-lg shadow-lg p-4 mb-4 hidden">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <h2 class="text-xl font-bold text-gray-900" id="currentFileName">No file selected</h2>
-                            <p class="text-sm text-gray-500" id="currentFilePath"></p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="viewBackups()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm flex items-center">
-                                <i class='bx bx-history mr-2'></i>
-                                Backups
-                            </button>
-                            <button onclick="toggleEditMode()" id="editBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm flex items-center">
-                                <i class='bx bx-edit mr-2'></i>
-                                Edit
-                            </button>
-                        </div>
-                    </div>
+            <div class="editor-container" id="editorContainer">
+                <div class="editor-placeholder">
+                    <i class='bx bx-file-blank'></i>
+                    <p>Select a file from the left to begin editing</p>
                 </div>
+            </div>
 
-                <!-- Editor -->
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <div id="editorPlaceholder" class="text-center py-16">
-                        <i class='bx bx-file-blank text-6xl text-gray-300'></i>
-                        <p class="text-gray-500 mt-4">Select a file from the left to begin</p>
-                    </div>
-
-                    <div id="editorContainer" class="hidden">
-                        <textarea 
-                            id="codeEditor" 
-                            class="code-editor w-full h-[500px] p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                            readonly
-                        ></textarea>
-
-                        <div class="flex gap-3 mt-4">
-                            <button onclick="previewDiff()" id="previewBtn" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                <i class='bx bx-show mr-2'></i>
-                                Preview Changes
-                            </button>
-                            <button onclick="applyFix()" id="applyBtn" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                <i class='bx bx-check-circle mr-2'></i>
-                                Apply Fix
-                            </button>
-                            <button onclick="cancelEdit()" id="cancelBtn" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold hidden">
-                                <i class='bx bx-x mr-2'></i>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <div class="controls-bar" id="controlsBar" style="display: none;">
+                <button onclick="previewDiff()" id="previewBtn" class="btn-primary btn-preview" disabled>
+                    <i class='bx bx-show'></i> Preview Changes
+                </button>
+                <button onclick="applyFix()" id="applyBtn" class="btn-primary btn-apply" disabled>
+                    <i class='bx bx-check-circle'></i> Apply Fix
+                </button>
+                <button onclick="cancelEdit()" id="cancelBtn" class="btn-primary btn-cancel" style="display: none;">
+                    <i class='bx bx-x'></i> Cancel
+                </button>
             </div>
         </div>
     </div>
@@ -192,12 +488,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let originalContent = '';
         let isEditMode = false;
         let allFiles = [];
+        let editor = null;
 
-        // Load files on page load
+        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadFiles();
-            
-            // Search functionality
             document.getElementById('fileSearch').addEventListener('input', (e) => {
                 filterFiles(e.target.value);
             });
@@ -213,7 +508,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 allFiles = data.files;
                 renderFiles(allFiles);
             } catch (err) {
-                Swal.fire('Error', 'Failed to load files: ' + err.message, 'error');
+                document.getElementById('fileList').innerHTML = 
+                    `<div style="padding: 20px; color: #ff6b6b; font-size: 12px;">${err.message}</div>`;
             }
         }
 
@@ -221,7 +517,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const container = document.getElementById('fileList');
             
             if (files.length === 0) {
-                container.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No files found</p>';
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #858585; font-size: 12px;">No files found</div>';
                 return;
             }
 
@@ -230,18 +526,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             files.forEach(file => {
                 if (file.dir !== lastDir) {
-                    html += `<div class="text-xs font-bold text-gray-500 mt-3 mb-1 px-2">${file.dir}</div>`;
+                    html += `<div class="file-dir">${file.dir}</div>`;
                     lastDir = file.dir;
                 }
                 
                 const icon = getFileIcon(file.extension);
                 html += `
-                    <div class="file-item p-2 rounded text-sm flex items-center justify-between" onclick="loadFile('${file.path}')">
-                        <div class="flex items-center overflow-hidden">
-                            <i class='bx ${icon} text-gray-600 mr-2'></i>
-                            <span class="truncate">${file.name}</span>
-                        </div>
-                        <span class="text-xs text-gray-400">${formatBytes(file.size)}</span>
+                    <div class="file-item" onclick="loadFile('${file.path}')">
+                        <i class='bx ${icon}'></i>
+                        <span>${file.name}</span>
                     </div>
                 `;
             });
@@ -251,8 +544,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function filterFiles(search) {
             const filtered = allFiles.filter(f => 
-                f.name.toLowerCase().includes(search.toLowerCase()) ||
-                f.path.toLowerCase().includes(search.toLowerCase())
+                f.name.toLowerCase().includes(search.toLowerCase())
             );
             renderFiles(filtered);
         }
@@ -276,19 +568,48 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 currentFile = data;
                 originalContent = data.content;
                 
-                document.getElementById('codeEditor').value = data.content;
-                document.getElementById('currentFileName').textContent = data.filename;
-                document.getElementById('currentFilePath').textContent = data.path + ` (${data.lines} lines)`;
+                // Initialize editor if not exists
+                if (!editor) {
+                    const editorDiv = document.querySelector('.editor-container');
+                    editorDiv.innerHTML = '';
+                    editor = CodeMirror(editorDiv, {
+                        value: data.content,
+                        mode: getModeForExtension(data.extension),
+                        theme: 'monokai',
+                        lineNumbers: true,
+                        lineWrapping: true,
+                        readOnly: true,
+                        indentUnit: 4,
+                        tabSize: 4,
+                        indentWithTabs: false,
+                        extraKeys: {
+                            'Ctrl-/': 'toggleComment',
+                            'Cmd-/': 'toggleComment'
+                        }
+                    });
+                } else {
+                    editor.setValue(data.content);
+                    editor.setOption('mode', getModeForExtension(data.extension));
+                    editor.setOption('readOnly', true);
+                }
                 
-                document.getElementById('editorPlaceholder').classList.add('hidden');
-                document.getElementById('editorContainer').classList.remove('hidden');
-                document.getElementById('fileInfoBar').classList.remove('hidden');
+                // Update header
+                document.getElementById('editorHeader').style.display = 'flex';
+                document.getElementById('controlsBar').style.display = 'flex';
+                document.getElementById('currentFileName').textContent = data.filename;
+                document.getElementById('currentFilePath').textContent = data.path;
+                document.getElementById('fileIcon').className = 'bx ' + getFileIcon(data.extension);
                 
                 isEditMode = false;
-                document.getElementById('codeEditor').readOnly = true;
                 document.getElementById('previewBtn').disabled = true;
                 document.getElementById('applyBtn').disabled = true;
-                document.getElementById('cancelBtn').classList.add('hidden');
+                document.getElementById('cancelBtn').style.display = 'none';
+                document.getElementById('editBtn').innerHTML = '<i class="bx bx-edit"></i> Edit';
+                document.getElementById('editBtn').classList.remove('editing');
+                
+                // Mark file as active
+                document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+                event.target.closest('.file-item').classList.add('active');
                 
                 Swal.close();
             } catch (err) {
@@ -299,36 +620,31 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function toggleEditMode() {
             isEditMode = !isEditMode;
-            const editor = document.getElementById('codeEditor');
-            const editBtn = document.getElementById('editBtn');
             
             if (isEditMode) {
-                editor.readOnly = false;
-                editor.classList.add('ring-2', 'ring-amber-400');
-                editBtn.innerHTML = '<i class="bx bx-lock-open mr-2"></i> Editing...';
-                editBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-                editBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
+                editor.setOption('readOnly', false);
+                editor.focus();
+                document.getElementById('editBtn').innerHTML = '<i class="bx bx-lock-open"></i> Editing...';
+                document.getElementById('editBtn').classList.add('editing');
                 document.getElementById('previewBtn').disabled = false;
-                document.getElementById('cancelBtn').classList.remove('hidden');
+                document.getElementById('cancelBtn').style.display = 'flex';
             } else {
-                editor.readOnly = true;
-                editor.classList.remove('ring-2', 'ring-amber-400');
-                editBtn.innerHTML = '<i class="bx bx-edit mr-2"></i> Edit';
-                editBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
-                editBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                editor.setOption('readOnly', true);
+                document.getElementById('editBtn').innerHTML = '<i class="bx bx-edit"></i> Edit';
+                document.getElementById('editBtn').classList.remove('editing');
                 document.getElementById('previewBtn').disabled = true;
                 document.getElementById('applyBtn').disabled = true;
-                document.getElementById('cancelBtn').classList.add('hidden');
+                document.getElementById('cancelBtn').style.display = 'none';
             }
         }
 
         function cancelEdit() {
-            document.getElementById('codeEditor').value = originalContent;
+            editor.setValue(originalContent);
             toggleEditMode();
         }
 
         async function previewDiff() {
-            const newContent = document.getElementById('codeEditor').value;
+            const newContent = editor.getValue();
             
             if (newContent === originalContent) {
                 Swal.fire('No Changes', 'The content is identical to the original', 'info');
@@ -355,8 +671,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (data.error) throw new Error(data.error);
 
                 showDiffModal(data.diff, data.stats);
-                
-                // Enable apply button
                 document.getElementById('applyBtn').disabled = false;
             } catch (err) {
                 Swal.fire('Error', err.message, 'error');
@@ -365,22 +679,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function showDiffModal(diff, stats) {
             let html = `
-                <div class="text-left max-h-[500px] overflow-y-auto">
-                    <div class="bg-gray-100 p-3 rounded mb-4 flex justify-around text-sm">
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-green-600">${stats.added}</div>
-                            <div class="text-gray-600">Added</div>
+                <div style="text-align: left; max-height: 500px; overflow-y: auto;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                        <div style="background: #1d3a1d; padding: 12px; border-radius: 4px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #4ec9b0;">${stats.added}</div>
+                            <div style="font-size: 11px; color: #858585; margin-top: 4px;">Added</div>
                         </div>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-red-600">${stats.removed}</div>
-                            <div class="text-gray-600">Removed</div>
+                        <div style="background: #3a1d1d; padding: 12px; border-radius: 4px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #ce7b7b;">${stats.removed}</div>
+                            <div style="font-size: 11px; color: #858585; margin-top: 4px;">Removed</div>
                         </div>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-gray-600">${stats.unchanged}</div>
-                            <div class="text-gray-600">Unchanged</div>
+                        <div style="background: #2d2d30; padding: 12px; border-radius: 4px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #858585;">${stats.unchanged}</div>
+                            <div style="font-size: 11px; color: #858585; margin-top: 4px;">Unchanged</div>
                         </div>
                     </div>
-                    <div class="border rounded">
+                    <div style="border: 1px solid #3e3e42; border-radius: 4px; overflow: hidden;">
             `;
 
             diff.lines.forEach(line => {
@@ -392,9 +706,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 const escapedContent = (line.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 html += `
-                    <div class="diff-line ${classes[line.type]} font-mono text-xs">
-                        <span class="text-gray-400 mr-4">${line.lineNum}</span>
-                        <span>${escapedContent || '&nbsp;'}</span>
+                    <div class="diff-line ${classes[line.type]}">
+                        <span style="color: #858585; margin-right: 16px; display: inline-block; width: 40px; text-align: right;">${line.lineNum}</span>
+                        <span style="font-family: monospace;">${escapedContent || '&nbsp;'}</span>
                     </div>
                 `;
             });
@@ -404,9 +718,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             Swal.fire({
                 title: '📊 Diff Preview',
                 html: html,
-                width: '800px',
+                width: '900px',
                 confirmButtonText: 'Close',
-                confirmButtonColor: '#4f46e5'
+                confirmButtonColor: '#0e639c',
+                background: '#1e1e1e',
+                color: '#e0e0e0'
             });
         }
 
@@ -414,8 +730,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const result = await Swal.fire({
                 title: 'Apply Fix?',
                 html: `
-                    <p class="text-gray-700 mb-3">This will:</p>
-                    <ul class="text-left text-sm text-gray-600">
+                    <p style="color: #e0e0e0; margin-bottom: 12px;">This will:</p>
+                    <ul style="text-align: left; color: #cccccc; font-size: 14px; margin-left: 20px;">
                         <li>✓ Create a backup with timestamp</li>
                         <li>✓ Overwrite the live file</li>
                         <li>✓ Log the action</li>
@@ -424,8 +740,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonText: 'Yes, Apply Fix',
-                confirmButtonColor: '#16a34a',
-                cancelButtonText: 'Cancel'
+                confirmButtonColor: '#13a10e',
+                cancelButtonText: 'Cancel',
+                background: '#1e1e1e',
+                color: '#e0e0e0'
             });
 
             if (!result.isConfirmed) return;
@@ -435,10 +753,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     title: 'Applying fix...',
                     html: 'Creating backup and writing file...',
                     allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
+                    didOpen: () => Swal.showLoading(),
+                    background: '#1e1e1e',
+                    color: '#e0e0e0'
                 });
 
-                const newContent = document.getElementById('codeEditor').value;
+                const newContent = editor.getValue();
 
                 const res = await fetch(`${API}?action=applyFix`, {
                     method: 'POST',
@@ -454,19 +774,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
                 originalContent = newContent;
                 isEditMode = false;
-                document.getElementById('codeEditor').readOnly = true;
+                editor.setOption('readOnly', true);
                 document.getElementById('applyBtn').disabled = true;
                 document.getElementById('previewBtn').disabled = true;
-                document.getElementById('cancelBtn').classList.add('hidden');
+                document.getElementById('cancelBtn').style.display = 'none';
+                document.getElementById('editBtn').innerHTML = '<i class="bx bx-edit"></i> Edit';
+                document.getElementById('editBtn').classList.remove('editing');
 
                 Swal.fire({
                     icon: 'success',
                     title: 'Fix Applied!',
                     html: `
-                        <p class="text-gray-700">File updated successfully</p>
-                        <p class="text-sm text-gray-500 mt-2">Backup: ${data.backup}</p>
+                        <p style="color: #e0e0e0;">File updated successfully</p>
+                        <p style="font-size: 12px; color: #858585; margin-top: 8px;">Backup: ${data.backup}</p>
                     `,
-                    confirmButtonColor: '#16a34a'
+                    confirmButtonColor: '#13a10e',
+                    background: '#1e1e1e',
+                    color: '#e0e0e0'
                 });
             } catch (err) {
                 Swal.fire('Error', err.message, 'error');
@@ -482,17 +806,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 if (data.error) throw new Error(data.error);
 
-                let html = '<div class="max-h-[400px] overflow-y-auto">';
+                let html = '<div style="max-height: 400px; overflow-y: auto;">';
                 
                 if (data.count === 0) {
-                    html += '<p class="text-gray-500 text-center py-8">No backups found for this file</p>';
+                    html += '<p style="color: #858585; text-align: center; padding: 40px 20px;">No backups found for this file</p>';
                 } else {
-                    html += '<div class="space-y-2">';
+                    html += '<div style="display: grid; gap: 8px;">';
                     data.backups.forEach(backup => {
                         html += `
-                            <div class="p-3 bg-gray-50 rounded border text-left">
-                                <div class="font-semibold text-sm">${backup.name}</div>
-                                <div class="text-xs text-gray-500 mt-1">
+                            <div style="padding: 12px; background: #2d2d30; border-radius: 4px; border: 1px solid #3e3e42;">
+                                <div style="font-weight: 500; color: #e0e0e0;">${backup.name}</div>
+                                <div style="font-size: 11px; color: #858585; margin-top: 4px;">
                                     Created: ${backup.created} | Size: ${formatBytes(backup.size)}
                                 </div>
                             </div>
@@ -506,11 +830,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 Swal.fire({
                     title: '🕒 Backups',
                     html: html,
-                    confirmButtonColor: '#4f46e5'
+                    confirmButtonColor: '#0e639c',
+                    background: '#1e1e1e',
+                    color: '#e0e0e0'
                 });
             } catch (err) {
                 Swal.fire('Error', err.message, 'error');
             }
+        }
+
+        function getModeForExtension(ext) {
+            const modes = {
+                'php': 'application/x-httpd-php',
+                'js': 'text/javascript',
+                'css': 'text/css',
+                'html': 'text/html',
+                'json': 'application/json'
+            };
+            return modes[ext] || 'null';
         }
 
         function getFileIcon(ext) {
@@ -538,7 +875,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 inputPlaceholder: 'e.g. api/new_tool.php or assets/styles/new.css',
                 showCancelButton: true,
                 confirmButtonText: 'Create File',
-                confirmButtonColor: '#4f46e5'
+                confirmButtonColor: '#0e639c',
+                background: '#1e1e1e',
+                color: '#e0e0e0'
             });
 
             if (!path) return;
@@ -568,7 +907,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 inputPlaceholder: 'e.g. assets/images/icons or scripts/tests/helpers',
                 showCancelButton: true,
                 confirmButtonText: 'Create Folder',
-                confirmButtonColor: '#f59e0b'
+                confirmButtonColor: '#6f42c1',
+                background: '#1e1e1e',
+                color: '#e0e0e0'
             });
 
             if (!path) return;
